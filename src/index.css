@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Larger base size: every rem-based size scales up for readability at 60+. */
+html { font-size: 112.5%; -webkit-text-size-adjust: 100%; }
+body { background: #f8fafc; }
+:focus-visible { outline: 3px solid #047857; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
