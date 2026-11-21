@@ -1,0 +1,34 @@
+// Checks the Canvas key path: coach on, no key typed → request with empty ?key= and no key header;
+// with a typed key → key in header only. Gemini is mocked; nothing leaves the machine.
+import { createRequire } from 'node:module';
+const { chromium, devices } = createRequire(import.meta.url)('playwright');
+import { preview } from 'vite';
+const server = await preview({ preview: { port: 4181, strictPort: true }, logLevel: 'silent' });
+const b = await chromium.launch(); const page = await (await b.newContext({ ...devices['Pixel 7'] })).newPage();
+const seen = [];
+await page.route('**/generativelanguage.googleapis.com/**', (r) => {
+  seen.push({ url: r.request().url(), key: r.request().headers()['x-goog-api-key'] ?? null });
+  r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: 'MOCK COACH ANSWER' }] } }] }) });
+});
+let ok = true; const check = (n, c, d = '') => { ok &&= c; console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${d}`); };
+await page.goto('http://localhost:4181/');
+await page.getByLabel('Your name').fill('T'); await page.getByLabel('Age').fill('66'); await page.getByLabel('Weight (kg)').fill('74');
+await page.getByRole('button', { name: 'Start' }).click();
+const nav = (t) => page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: t }).click();
+await nav('Settings');
+check('key field says blank is fine in Canvas', (await page.getByPlaceholder('Leave blank inside Gemini Canvas').count()) === 1);
+await page.getByText('I agree to send my training and health data to Google').click();
+await nav('Coach');
+await page.getByLabel('Message the coach').fill('Hello');
+await page.getByRole('button', { name: 'Send' }).click();
+await page.getByText('MOCK COACH ANSWER').waitFor({ timeout: 10000 });
+check('no key typed: Canvas form ?key= and no header', seen.length === 1 && /:generateContent\?key=$/.test(seen[0].url) && seen[0].key === null, JSON.stringify(seen[0]));
+await nav('Settings');
+await page.getByLabel('Gemini API key').fill('MY-OWN-TEST-KEY');
+await nav('Coach');
+await page.getByLabel('Message the coach').fill('Again');
+await page.getByRole('button', { name: 'Send' }).click();
+await page.waitForFunction(() => document.body.innerText.split('MOCK COACH ANSWER').length > 2, null, { timeout: 10000 });
+check('own key typed: header only, not in URL', seen.length === 2 && !seen[1].url.includes('key=') && seen[1].key === 'MY-OWN-TEST-KEY');
+await b.close(); await server.close();
+process.exit(ok ? 0 : 1);
