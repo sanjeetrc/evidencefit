@@ -1,7 +1,8 @@
 import { CONDITION_ITEMS, MEDICATION_ITEMS, RED_FLAG_ITEMS } from './reference';
 import { inferRiskTags } from './program';
 import { daysAgoISO, daysBetween, formatDateISO, shortDateLabel } from './dates';
-import { LoggedExercise, Profile, ProgramExercise, RiskTag, Workout } from './types';
+import { defaultIncrementKg, formatLoad, toUnit } from './units';
+import { LoadUnit, LoggedExercise, Profile, ProgramExercise, RiskTag, Workout } from './types';
 
 // ---------------------------------------------------------------------------
 // Module 0: pre-participation screening (ACSM-style decision logic)
@@ -137,7 +138,6 @@ export const mealSlotsFor = (pattern: Profile['mealPattern']) =>
 /** Sets that were actually performed (zero-rep rows are treated as not done). */
 const doneSets = (e: LoggedExercise) => e.sets.filter((s) => Number(s.reps) > 0);
 
-export const defaultIncrement = (loadKg: number) => (loadKg >= 20 ? 2.5 : 1);
 
 export interface ProgressionItem {
   name: string;
@@ -154,6 +154,7 @@ interface SessionSummary {
   lastLoad: number;
   unit: LoggedExercise['unit'];
   incrementKg?: number;
+  loadUnit: LoadUnit;
 }
 
 export function summariseExercise(e: LoggedExercise, date: string): SessionSummary | null {
@@ -173,6 +174,7 @@ export function summariseExercise(e: LoggedExercise, date: string): SessionSumma
     lastLoad: sets[sets.length - 1].loadKg || 0,
     unit: e.unit,
     incrementKg: e.incrementKg,
+    loadUnit: e.loadUnit ?? 'kg',
   };
 }
 
@@ -228,9 +230,11 @@ export function runAudit(profile: Profile, today: string = formatDateISO()): Aud
       if (last.unit !== 'reps') {
         suggestion = last.unit === 'min' ? 'Add 2–5 minutes, keeping the same effort' : 'Add 5–10 seconds or a harder position';
       } else if (last.lastLoad > 0) {
-        const inc = last.incrementKg ?? defaultIncrement(last.lastLoad);
-        nextLoad = Math.round((last.lastLoad + inc) * 10) / 10;
-        suggestion = `Add the smallest step (${inc} kg): next ${nextLoad} kg, restart at the bottom of the rep range`;
+        const u = last.loadUnit;
+        const inc = last.incrementKg ?? defaultIncrementKg(last.lastLoad, u);
+        nextLoad = Math.round((last.lastLoad + inc) * 1000) / 1000;
+        const incShown = Math.round(toUnit(inc, u) * 100) / 100;
+        suggestion = `Add the smallest step (${incShown} ${u}): next ${formatLoad(nextLoad, u)}, restart at the bottom of the rep range`;
       } else {
         suggestion = 'Bodyweight: slow the lowering to 3 s, add a pause, or move to a harder variant';
       }

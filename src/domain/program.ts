@@ -26,6 +26,22 @@ const warmUp = () =>
     tier: 'Coaching Convention',
   });
 
+export const PUSH_UP_NAME = 'Push-ups (floor, or hands on a bench)';
+const PUSH_UP_NOTES = 'Hands on a bench or counter if floor push-ups are too hard; lower the height as you get stronger. Body in one straight line, exhale as you push.';
+const pushUp = () =>
+  ex({
+    name: PUSH_UP_NAME, repMin: 8, repMax: 12, unit: 'reps', targetRpe: 7.5, restSec: 75, notes: PUSH_UP_NOTES,
+    why: 'Pushing strength for getting up from the floor and bracing a fall.', tier: 'Strong Consensus',
+  });
+
+export const PUSH_DOWN_NAME = 'Cable triceps push-down';
+const pushDown = () =>
+  ex({
+    name: PUSH_DOWN_NAME, sets: 2, repMin: 10, repMax: 15, unit: 'reps', targetRpe: 7.5, restSec: 60, incrementKg: 2.5,
+    notes: 'Rope or bar. Elbows stay pinned to your sides; straighten fully, return slowly.',
+    why: 'Direct triceps work. Push-ups and presses already train it, so 2 sets twice a week is enough.', tier: 'Coaching Convention',
+  });
+
 const gymA = (): DayPlan => ({
   title: 'Gym A — Power, legs, hinge, push-pull, carry, easy walk',
   location: 'Gym',
@@ -46,10 +62,8 @@ const gymA = (): DayPlan => ({
       notes: 'Hinge at the hips, flat back, dumbbells close to the legs. Never to failure.',
       why: 'Loads hips and spine for bone; trains the hinge used in lifting.', tier: 'Strong Consensus',
     }),
-    ex({
-      name: 'Incline push-up (bench)', repMin: 8, repMax: 12, unit: 'reps', targetRpe: 7.5, restSec: 75,
-      notes: 'Lower the bench height as you progress.',
-    }),
+    pushUp(),
+    pushDown(),
     ex({
       name: 'Seated cable row', sets: 2, repMin: 10, repMax: 12, unit: 'reps', targetRpe: 7.5, restSec: 75, incrementKg: 2.5,
       notes: 'Chest tall; pull elbows to the ribs.',
@@ -158,3 +172,30 @@ export const inferRiskTags = (name: string): RiskTag[] => {
   if (/deadlift|squat|leg press|1rm|max/.test(n) && !/box squat|goblet/.test(n)) tags.add('heavyBrace');
   return [...tags];
 };
+
+/** Bump when the built-in plan gains or renames exercises. */
+export const PROGRAM_VERSION = 2;
+
+/**
+ * Upgrades a saved plan in place without touching the user's own edits:
+ * v1 → v2 renames the incline push-up and adds a triceps push-down after it.
+ */
+export function upgradeProgram(program: Program, fromVersion: number): Program {
+  if (fromVersion >= 2) return program;
+  const out = { ...program };
+  for (const day of Object.keys(out) as (keyof Program)[]) {
+    const plan = out[day];
+    const idx = plan.exercises.findIndex((e) => e.name === 'Incline push-up (bench)');
+    if (idx < 0) continue;
+    const exercises = [...plan.exercises];
+    const old = exercises[idx];
+    const fresh = pushUp();
+    exercises[idx] = { ...old, name: fresh.name, notes: old.notes === 'Lower the bench height as you progress.' ? fresh.notes : old.notes, why: old.why ?? fresh.why, tier: old.tier ?? fresh.tier };
+    if (!exercises.some((e) => /push-?down/i.test(e.name))) {
+      const pd = pushDown();
+      exercises.splice(idx + 1, 0, { ...pd, id: `${pd.id}_${day}_${Date.now().toString(36)}` });
+    }
+    out[day] = { ...plan, exercises };
+  }
+  return out;
+}

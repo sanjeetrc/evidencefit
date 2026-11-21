@@ -2,6 +2,7 @@ export const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as
 export type DayKey = (typeof DAYS_OF_WEEK)[number];
 
 export type Unit = 'reps' | 'sec' | 'min';
+export type LoadUnit = 'kg' | 'lb';
 export type Location = 'Gym' | 'Home' | 'Outdoor' | 'Rest';
 export type Climate = 'Normal' | 'Hot/Humid';
 export type MealPattern = '2-meal' | '3-meal';
@@ -26,8 +27,10 @@ export interface ProgramExercise {
   targetRpe: number;
   restSec: number;
   notes: string;
-  /** Smallest load step available for this exercise (kg). */
+  /** Smallest load step available for this exercise, stored in kg. */
   incrementKg?: number;
+  /** Unit printed on this machine or dumbbell. Loads are stored in kg regardless. */
+  loadUnit?: LoadUnit;
   tags?: RiskTag[];
   why?: string;
   tier?: EvidenceTier;
@@ -57,8 +60,11 @@ export interface LoggedExercise {
   unit: Unit;
   targetRpe: number;
   incrementKg?: number;
+  loadUnit?: LoadUnit;
   notes?: string;
   tags?: RiskTag[];
+  /** Where it hurt, e.g. "Left knee", when any set had pain above 0. */
+  painSite?: string;
   sets: LoggedSet[];
 }
 
@@ -147,6 +153,8 @@ export interface Profile {
   medications: Record<MedicationKey, boolean>;
   /** Clinician clearance for vigorous work has been recorded by the user. */
   clearedForVigorous: boolean;
+  /** Bumped when the built-in plan gains exercises, so saved plans can be upgraded in place. */
+  programVersion: number;
   program: Program;
   workouts: Workout[];
   proteinLogs: Record<string, ProteinItem[]>;

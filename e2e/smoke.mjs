@@ -34,9 +34,16 @@ try {
   check('J1 first run creates profile', await page.getByRole('heading', { name: "Today's readiness" }).isVisible());
 
   // J2: protein logging, 60+ per-meal target
-  await page.getByRole('button', { name: /Fish \/ pomfret 100 g/ }).click();
-  await page.getByRole('button', { name: /Paneer 100 g/ }).click();
-  check('J2 protein chips add to today', (await page.locator('text=43 g').first().count()) > 0);
+  await page.getByRole('button', { name: 'Fish', exact: true }).click();
+  check('J2 fish offers small / medium / large', (await page.getByRole('group', { name: 'Fish size' }).getByRole('button').count()) === 3);
+  await page.getByRole('button', { name: 'Add Fish medium, 25 g protein' }).click();
+  await page.getByRole('button', { name: 'Paneer', exact: true }).click();
+  await page.getByRole('button', { name: 'Add Paneer medium, 18 g protein' }).click();
+  check('J2 portions add to today', (await page.locator('text=43 g').first().count()) > 0);
+  await page.getByRole('button', { name: /^Remove Paneer/ }).click();
+  check('J2 remove takes it off', (await page.locator('text=25 g').first().count()) > 0 && (await page.getByRole('button', { name: /^Remove Paneer/ }).count()) === 0);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  check('J2 undo puts it back', (await page.locator('text=43 g').first().count()) > 0);
   check('J2 60+ per-meal target shown (0.4 g/kg = 30 g)', await page.getByText(/at least 30 g at each meal/).isVisible());
 
   // J3: log Monday's session with "done as planned", save, see it in history
@@ -45,11 +52,24 @@ try {
   const leg = page.getByRole('article', { name: 'Leg press' });
   await leg.getByLabel('Leg press set 1 load kg').fill('60');
   await leg.getByRole('button', { name: 'Done as planned' }).click();
+  await leg.getByLabel('Leg press set 2 pain 0 to 10').fill('2');
+  await leg.getByRole('button', { name: 'How to score pain' }).click();
+  check('J3 pain guide explains the scale', await leg.getByText(/Effort, burning muscles and breathlessness are not pain/).isVisible());
+  await leg.getByRole('group', { name: 'Leg press pain side' }).getByRole('button', { name: 'Left' }).click();
+  await leg.getByLabel('Leg press pain area').selectOption('Knee');
+  check('J3 mild pain guidance shown', await leg.getByText(/Mild pain \(2\/10\)/).isVisible());
+  check('J3 push-ups and triceps push-down in Monday plan',
+    (await page.getByRole('article', { name: /^Push-ups/ }).count()) === 1 && (await page.getByRole('article', { name: 'Cable triceps push-down' }).count()) === 1);
+  const pd = page.getByRole('article', { name: 'Cable triceps push-down' });
+  await pd.getByRole('group', { name: 'Cable triceps push-down weight unit' }).getByRole('button', { name: 'lb' }).click();
+  await pd.getByLabel('Cable triceps push-down set 1 load lb').fill('50');
+  await pd.getByRole('button', { name: 'Done as planned' }).click();
   await shot('02-today-logger');
   await page.getByRole('button', { name: 'Save session' }).click();
-  check('J3 session saved', await page.getByText(/Session saved: 1 exercise/).isVisible());
+  check('J3 session saved', await page.getByText(/Session saved: 2 exercise/).isVisible());
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();
   check('J3 session in history', await page.getByText(/Leg press 3×/).isVisible());
+  // (weights typed once carry to the following sets: checked in the backup below)
   await shot('03-progress');
 
   // J4: health screen drives warnings (glaucoma → avoid head-down Surya Namaskar)
@@ -80,7 +100,10 @@ try {
   await dl.saveAs(path);
   const backup = readFileSync(path, 'utf8');
   check('J6 backup has data', backup.includes('Leg press'));
+  const saved = JSON.parse(backup).profiles[0].workouts[0].exercises.find((e) => e.name === 'Leg press');
+  check('J6 one typed weight carries to every set', saved.sets.every((x) => x.loadKg === 60), saved.sets.map((x) => x.loadKg).join('/'));
   check('J6 backup excludes API key', !backup.includes('TEST-SECRET-KEY'));
+  check('J6 backup keeps pain site and lb unit', backup.includes('"painSite": "Left knee"') && backup.includes('"loadUnit": "lb"'));
   writeFileSync(`${OUT}/corrupt.json`, '{"profiles": "nope"}');
   await page.locator('input[type=file]').setInputFiles(`${OUT}/corrupt.json`);
   check('J6 corrupt backup rejected with message', await page.getByText('Backup contains no profiles.').isVisible());

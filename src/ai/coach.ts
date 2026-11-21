@@ -1,3 +1,4 @@
+import { formatLoad } from '../domain/units';
 import { CONDITION_ITEMS, MEDICATION_ITEMS } from '../domain/reference';
 import { Audit } from '../domain/engine';
 import { AiCoachSettings, Profile } from '../domain/types';
@@ -44,7 +45,7 @@ export function buildSystemPrompt(profile: Profile, audit: Audit): string {
     date: w.date,
     climate: w.climate,
     sleep: w.sleepHours,
-    exercises: w.exercises.map((e) => ({ name: e.name, sets: e.sets.map((s) => `${s.loadKg}kg x ${s.reps}${e.unit} RPE${s.rpe ?? '-'} pain${s.pain}`) })),
+    exercises: w.exercises.map((e) => ({ name: e.name, sets: e.sets.map((s) => `${formatLoad(s.loadKg, e.loadUnit ?? 'kg').replace(' ', '')} x ${s.reps}${e.unit} RPE${s.rpe ?? '-'} pain${s.pain}`), ...(e.painSite ? { painSite: e.painSite } : {}) })),
   }));
   return `You are a cautious, evidence-based strength and conditioning coach.
 Rules:

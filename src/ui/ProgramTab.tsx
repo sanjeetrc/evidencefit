@@ -4,7 +4,8 @@ import { Audit, exerciseWarnings } from '../domain/engine';
 import { buildDefaultProgram, inferRiskTags } from '../domain/program';
 import { formatDateISO, shortDateLabel } from '../domain/dates';
 import { uid } from '../domain/state';
-import { Benchmark, DAYS_OF_WEEK, DayKey, DayPlan, Location, Profile, ProgramExercise, Unit } from '../domain/types';
+import { Benchmark, DAYS_OF_WEEK, DayKey, DayPlan, LoadUnit, Location, Profile, ProgramExercise, Unit } from '../domain/types';
+import { KG_PER_LB, fromUnit, toUnit } from '../domain/units';
 import { Card, CardHeader, NumInput, TierBadge } from './common';
 
 interface Props {
@@ -104,7 +105,7 @@ export function ProgramTab({ profile, audit, updateProfile, showToast, confirm }
                 {warnings.map((w, k) => (
                   <p key={k} className={`text-sm font-semibold px-2.5 py-1.5 rounded-lg ${w.severity === 'avoid' ? 'bg-rose-100 text-rose-900' : 'bg-amber-100 text-amber-950'}`}>{w.severity === 'avoid' ? 'Avoid: ' : 'Caution: '}{w.text}</p>
                 ))}
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-7 gap-2 text-sm">
                   <label className="flex flex-col gap-0.5"><span className="text-xs font-bold text-slate-600 uppercase">Sets</span>
                     <NumInput label="Sets" value={ex.sets} min={1} max={10} onChange={(v) => setEx(ex.id, { sets: v ?? 1 })} /></label>
                   <label className="flex flex-col gap-0.5"><span className="text-xs font-bold text-slate-600 uppercase">Min</span>
@@ -117,8 +118,17 @@ export function ProgramTab({ profile, audit, updateProfile, showToast, confirm }
                     </select></label>
                   <label className="flex flex-col gap-0.5"><span className="text-xs font-bold text-slate-600 uppercase">RPE</span>
                     <NumInput label="Target RPE" value={ex.targetRpe} min={1} max={10} step={0.5} onChange={(v) => setEx(ex.id, { targetRpe: v ?? 7 })} /></label>
-                  <label className="flex flex-col gap-0.5"><span className="text-xs font-bold text-slate-600 uppercase">Step kg</span>
-                    <NumInput label="Smallest load step in kg" value={ex.incrementKg ?? null} allowEmpty min={0.25} max={20} step={0.25} onChange={(v) => setEx(ex.id, { incrementKg: v ?? undefined })} /></label>
+                  <label className="flex flex-col gap-0.5"><span className="text-xs font-bold text-slate-600 uppercase">Weights in</span>
+                    <select aria-label="Weight unit" value={ex.loadUnit ?? 'kg'}
+                      onChange={(e) => { const u = e.target.value as LoadUnit; setEx(ex.id, { loadUnit: u, incrementKg: u === 'lb' ? 5 * KG_PER_LB : undefined }); }}
+                      className="min-h-[44px] px-2 rounded-lg border border-slate-300 bg-white font-semibold">
+                      <option value="kg">kg</option><option value="lb">lb</option>
+                    </select></label>
+                  <label className="flex flex-col gap-0.5"><span className="text-xs font-bold text-slate-600 uppercase">Step {ex.loadUnit ?? 'kg'}</span>
+                    <NumInput label={`Smallest load step in ${ex.loadUnit ?? 'kg'}`}
+                      value={ex.incrementKg === undefined ? null : Math.round(toUnit(ex.incrementKg, ex.loadUnit ?? 'kg') * 100) / 100}
+                      allowEmpty min={0.25} max={ex.loadUnit === 'lb' ? 40 : 20} step={0.25}
+                      onChange={(v) => setEx(ex.id, { incrementKg: v === null ? undefined : fromUnit(v, ex.loadUnit ?? 'kg') })} /></label>
                 </div>
                 <input type="text" aria-label="Coaching cue" placeholder="Coaching cue" value={ex.notes} onChange={(e) => setEx(ex.id, { notes: e.target.value })}
                   className="w-full text-sm px-3 min-h-[40px] rounded-lg border border-slate-300 bg-white" />

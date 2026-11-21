@@ -1,3 +1,4 @@
+import { PAIN_AREAS } from '../domain/reference';
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, BarChart3, Bot, RefreshCw, Send, Sparkles } from 'lucide-react';
 import { askCoach } from '../ai/coach';
@@ -11,7 +12,7 @@ interface Props {
   profile: Profile;
   audit: Audit;
   settings: AiCoachSettings;
-  prefillSwap: { exercise: string; pain: number } | null;
+  prefillSwap: { exercise: string; pain: number; site?: string } | null;
   clearPrefill: () => void;
   /** Writes to a specific profile id, so a reply never lands on another person's profile. */
   updateProfileById: (id: string, fn: (p: Profile) => Partial<Profile>) => void;
@@ -35,6 +36,7 @@ export function CoachTab({ profile, audit, settings, prefillSwap, clearPrefill, 
     if (!prefillSwap) return;
     setSwapEx(prefillSwap.exercise);
     setSwapPain(prefillSwap.pain);
+    if (prefillSwap.site) setSwapArea(prefillSwap.site);
     setPanel('swap');
     clearPrefill();
   }, [prefillSwap, clearPrefill]);
@@ -91,7 +93,7 @@ export function CoachTab({ profile, audit, settings, prefillSwap, clearPrefill, 
           onSubmit={(e) => { e.preventDefault(); if (swapEx.trim()) send(`I had ${swapPain}/10 ${swapArea.toLowerCase()} pain during "${swapEx}". Walk me through the pain-modification ladder briefly and give 2 joint-friendly alternatives that fit my flags.`, `Pain swap: ${swapEx} (${swapArea}, ${swapPain}/10)`); }}>
           <input required aria-label="Exercise" placeholder="Exercise" value={swapEx} onChange={(e) => setSwapEx(e.target.value)} className="sm:col-span-2 min-h-[44px] px-3 rounded-lg border border-amber-300 bg-white text-sm" />
           <select aria-label="Painful area" value={swapArea} onChange={(e) => setSwapArea(e.target.value)} className="min-h-[44px] px-3 rounded-lg border border-amber-300 bg-white text-sm">
-            {['Knee', 'Lower back', 'Shoulder', 'Elbow or wrist', 'Hip', 'Ankle or foot'].map((a) => <option key={a}>{a}</option>)}
+            {[...new Set([swapArea, ...PAIN_AREAS])].map((a) => <option key={a}>{a}</option>)}
           </select>
           <div className="flex gap-2">
             <input type="number" aria-label="Pain 1 to 10" min={1} max={10} value={swapPain} onChange={(e) => setSwapPain(Math.min(10, Math.max(1, Number(e.target.value) || 1)))} className="w-16 min-h-[44px] px-2 rounded-lg border border-amber-300 bg-white text-sm" />

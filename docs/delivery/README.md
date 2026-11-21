@@ -65,6 +65,19 @@ Not verified: real iPhone/Android install and offline mode on device; live Gemin
 
 Android install evidence (Chromium, Pixel 7 emulation): manifest errors none; installability errors none; service worker registered; app reloads offline after first visit. Not yet confirmed on a physical phone.
 
+## Release 1.1 (2026-11-21): changes from first use
+
+| Owner feedback | Change | Guess to confirm |
+|---|---|---|
+| Fish / chicken as small, medium, large | Tap a food, then pick a size; each size shows what it looks like and its protein grams. Prawns and milk added. | Portion weights and grams are typical values; real pieces vary by about 20%. |
+| Can add but not subtract protein | Each logged item has a visible Remove button, with Undo. | |
+| Machines in kg or lb? | Per-exercise "Weights marked in kg / lb" switch (default kg), remembered in the plan. You type what the stack shows; stored in kg; progression advice uses your unit (5 lb step on lb machines). Hidden on bodyweight moves. | Default kg. |
+| How to decide pain level; left/right leg/arm | "Pain ?" opens a 0–10 guide (effort is not pain; 1–3 carry on; 4–5 modify; 6+ or sharp stop). Any pain above 0 asks side and body part, saved with the session, in CSV and backup, and passed to the coach swap. Chest pain shows an urgent-care warning. | Read as recording where it hurts, not separate left/right sets. |
+| Push-ups; triceps push-downs | Push-ups named plainly (floor, or hands on a bench). Cable triceps push-down added after push-ups on Gym A days: 2 × 10–15 at RPE 7.5, twice a week (4 direct sets; pressing already trains triceps). Saved plans upgrade in place (programVersion 2), keeping the owner's edits. | Gym A (Mon/Fri) placement. |
+| (found in testing) | A weight typed in set 1 now carries to blank later sets, so progression is not misread as bodyweight. | |
+
+Evidence: 52 unit tests (new AC-11 units, AC-12 plan upgrade, AC-13 portions and pain), 28/28 phone end-to-end checks.
+
 ## Backup and restore (runbook)
 - Settings → *Download backup* (all people). The app nags after 14 days. Keep copies in Google Drive.
 - Restore: Settings → *Restore from backup* → confirm. Accepts prototype (v1) backups.

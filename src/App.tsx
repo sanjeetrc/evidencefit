@@ -45,7 +45,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('today');
   const [toast, setToast] = useState<{ message: string; tone: 'emerald' | 'amber' } | null>(null);
   const [modal, setModal] = useState<ModalState>({ open: false });
-  const [prefillSwap, setPrefillSwap] = useState<{ exercise: string; pain: number } | null>(null);
+  const [prefillSwap, setPrefillSwap] = useState<{ exercise: string; pain: number; site?: string } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [storageInfo, setStorageInfo] = useState('Stored on this device');
   const toastTimer = useRef<number>();
@@ -187,7 +187,7 @@ export default function App() {
         <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-5 sm:px-6">
           {tab === 'today' && (
             <TodayTab profile={profile} audit={audit} draft={drafts[profile.id]} setDraft={setDraft} updateProfile={updateProfile}
-              onAskSwap={(exercise, pain) => { setPrefillSwap({ exercise, pain }); setTab('coach'); }}
+              onAskSwap={(exercise, pain, site) => { setPrefillSwap({ exercise, pain, site }); setTab('coach'); }}
               showToast={showToast} confirm={confirm} backupDue={backupDue} goToSettings={() => setTab('settings')} />
           )}
           {tab === 'program' && <ProgramTab profile={profile} audit={audit} updateProfile={updateProfile} showToast={showToast} confirm={confirm} />}

@@ -1,7 +1,7 @@
-import { buildDefaultProgram } from './program';
+import { PROGRAM_VERSION, buildDefaultProgram, upgradeProgram } from './program';
 import { daysAgoISO, formatDateISO, isValidISODate } from './dates';
 import {
-  AppState, Benchmark, CONDITION_KEYS, ChatMessage, DAYS_OF_WEEK, DayKey, DayPlan, LoggedExercise, LoggedSet,
+  AppState, Benchmark, CONDITION_KEYS, ChatMessage, DAYS_OF_WEEK, DayKey, DayPlan, LoadUnit, LoggedExercise, LoggedSet,
   MEDICATION_KEYS, Profile, Program, ProgramExercise, ProteinItem, RED_FLAG_KEYS, Unit, Workout,
 } from './types';
 
@@ -30,6 +30,7 @@ export const createBlankProfile = (name = 'My profile', age = 60, weightKg = 70)
   redFlags: falseMap(RED_FLAG_KEYS),
   medications: falseMap(MEDICATION_KEYS),
   clearedForVigorous: false,
+  programVersion: PROGRAM_VERSION,
   program: buildDefaultProgram(),
   workouts: [],
   proteinLogs: {},
@@ -67,6 +68,7 @@ const str = (v: unknown, fallback = '', maxLen = 500): string =>
   (typeof v === 'string' ? v : v === null || v === undefined ? fallback : String(v)).slice(0, maxLen);
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const loadUnit = (v: unknown): LoadUnit | undefined => (v === 'lb' ? 'lb' : v === 'kg' ? 'kg' : undefined);
 const unit = (v: unknown): Unit => (v === 'sec' || v === 'min' ? v : 'reps');
 const boolMap = <K extends string>(keys: readonly K[], v: unknown) =>
   Object.fromEntries(keys.map((k) => [k, isObj(v) ? Boolean(v[k]) : false])) as Record<K, boolean>;
@@ -88,6 +90,7 @@ function parseProgramExercise(v: unknown): ProgramExercise | null {
     restSec: num(v.restSec, 60, 0, 600),
     notes: str(v.notes),
     incrementKg: numOrNull(v.incrementKg, 0.25, 20) ?? undefined,
+    loadUnit: loadUnit(v.loadUnit),
     tags: Array.isArray(v.tags) ? (v.tags.filter((t) => typeof t === 'string') as ProgramExercise['tags']) : undefined,
     why: typeof v.why === 'string' ? v.why : undefined,
     tier: typeof v.tier === 'string' ? (v.tier as ProgramExercise['tier']) : undefined,
@@ -129,7 +132,9 @@ function parseLoggedExercise(v: unknown): LoggedExercise | null {
     unit: unit(v.unit),
     targetRpe: num(v.targetRpe, 7.5, 1, 10),
     incrementKg: numOrNull(v.incrementKg, 0.25, 20) ?? undefined,
+    loadUnit: loadUnit(v.loadUnit),
     tags: Array.isArray(v.tags) ? (v.tags as LoggedExercise['tags']) : undefined,
+    painSite: str(v.painSite, '', 60) || undefined,
     sets,
   };
 }
@@ -210,7 +215,8 @@ export function parseProfile(v: unknown): Profile | null {
     redFlags: boolMap(RED_FLAG_KEYS, v.redFlags),
     medications: boolMap(MEDICATION_KEYS, v.medications),
     clearedForVigorous: Boolean(v.clearedForVigorous),
-    program: parseProgram(v.program),
+    programVersion: PROGRAM_VERSION,
+    program: upgradeProgram(parseProgram(v.program), num(v.programVersion, 1, 0, 1000)),
     workouts: arr(v.workouts).map(parseWorkout).filter((w): w is Workout => w !== null),
     proteinLogs: parseProteinLogs(v.proteinLogs),
     benchmarks: arr(v.benchmarks).map(parseBenchmark).filter((b): b is Benchmark => b !== null),

@@ -1,27 +1,75 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, Bot, CheckCircle2, CloudSun, Dumbbell, Flame, HeartPulse, Info, Moon, Plus, Trash2, TrendingUp, Utensils, X,
+  Activity, AlertTriangle, Bot, CheckCircle2, CloudSun, Dumbbell, Flame, HeartPulse, HelpCircle, Info, Moon, Plus, Trash2, TrendingUp, Undo2, Utensils, X,
 } from 'lucide-react';
 import { Audit, exerciseWarnings, mealSlotsFor } from '../domain/engine';
 import { formatDateISO, getDayKeyFromDate, shortDateLabel } from '../domain/dates';
-import { PROTEIN_QUICK_CHIPS } from '../domain/reference';
+import { PAIN_AREAS, PAIN_SCALE, PAIN_SIDES, PROTEIN_FOODS, portionLabel } from '../domain/reference';
+import { KG_PER_LB, displayLoad, fromUnit } from '../domain/units';
 import { inferRiskTags } from '../domain/program';
 import { isDuplicateWorkout, uid } from '../domain/state';
-import { Climate, DAYS_OF_WEEK, DayKey, Location, LoggedExercise, Profile, RiskTag, Unit, Workout } from '../domain/types';
+import { Climate, DAYS_OF_WEEK, DayKey, LoadUnit, Location, LoggedExercise, Profile, ProteinItem, RiskTag, Unit, Workout } from '../domain/types';
 import { Card, CardHeader, NumInput } from './common';
 import { Timer } from './Timer';
 
-export interface DraftSet { loadKg: number | null; reps: number | null; rpe: number | null; pain: number | null }
+/** `load` is in the exercise's own unit (kg or lb), exactly as typed; converted to kg on save. */
+export interface DraftSet { load: number | null; reps: number | null; rpe: number | null; pain: number | null }
 export interface DraftExercise {
   exerciseId: string; name: string; repMin: number; repMax: number; unit: Unit; targetRpe: number;
-  incrementKg?: number; notes?: string; tags?: RiskTag[]; sets: DraftSet[];
+  incrementKg?: number; loadUnit: LoadUnit; notes?: string; tags?: RiskTag[]; sets: DraftSet[];
+  painSide?: string; painArea?: string;
 }
 export interface Draft {
   date: string; templateKey: DayKey | 'Custom'; title: string; location: Location; notes: string;
   sleepHours: number | null; restingHr: number | null; climate: Climate; exercises: DraftExercise[];
 }
 
-const emptySet = (loadKg: number | null): DraftSet => ({ loadKg, reps: null, rpe: null, pain: null });
+const emptySet = (load: number | null): DraftSet => ({ load, reps: null, rpe: null, pain: null });
+
+/** Drafts saved by the previous version stored `loadKg` and had no unit. */
+function normaliseDraft(d: Draft): Draft {
+  return {
+    ...d,
+    exercises: (d.exercises ?? []).map((e) => ({
+      ...e,
+      loadUnit: e.loadUnit === 'lb' ? 'lb' : 'kg',
+      sets: (e.sets ?? []).map((s) => {
+        const legacy = s as DraftSet & { loadKg?: number | null };
+        return { ...s, load: legacy.load !== undefined ? legacy.load : legacy.loadKg ?? null };
+      }),
+    })),
+  };
+}
+
+/** A blank weight means "same as the set before", so one typed weight covers all sets. */
+const carryLoads = (sets: DraftSet[]): DraftSet[] => {
+  let prev: number | null = null;
+  return sets.map((x) => {
+    const load = x.load ?? prev;
+    prev = load;
+    return { ...x, load };
+  });
+};
+
+const painSiteOf = (e: DraftExercise) =>
+  e.painArea ? (e.painSide && e.painSide !== 'Middle' ? `${e.painSide} ${e.painArea.toLowerCase()}` : e.painArea) : undefined;
+
+function PainGuide() {
+  const tone = { emerald: 'bg-emerald-50 border-emerald-200 text-emerald-950', amber: 'bg-amber-50 border-amber-300 text-amber-950', rose: 'bg-rose-50 border-rose-300 text-rose-950' };
+  return (
+    <div className="my-2 rounded-xl border border-slate-200 bg-white p-3 text-sm">
+      <p className="font-bold text-slate-900">How to score pain (0–10)</p>
+      <p className="mt-0.5 text-slate-700">Score the joint or body part that hurts, not how hard the set felt. Use the worst moment of the set.</p>
+      <ul className="mt-2 space-y-1.5">
+        {PAIN_SCALE.map((r) => (
+          <li key={r.range} className={`rounded-lg border px-2.5 py-1.5 ${tone[r.tone]}`}>
+            <strong>{r.range}: {r.label}.</strong> {r.action}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function buildDraft(profile: Profile, audit: Audit, key: DayKey | 'Custom', date = formatDateISO()): Draft {
   const lastLoads = new Map<string, number>();
@@ -42,10 +90,12 @@ export function buildDraft(profile: Profile, audit: Audit, key: DayKey | 'Custom
     location: plan.location,
     exercises: plan.exercises.map((e) => {
       const n = e.name.toLowerCase();
-      const load = ready.get(n) ?? lastLoads.get(n) ?? null;
+      const u: LoadUnit = e.loadUnit ?? 'kg';
+      const kg = ready.get(n) ?? lastLoads.get(n) ?? null;
+      const load = kg === null || kg === 0 ? null : displayLoad(kg, u);
       return {
         exerciseId: e.id, name: e.name, repMin: e.repMin, repMax: e.repMax, unit: e.unit, targetRpe: e.targetRpe,
-        incrementKg: e.incrementKg, notes: e.notes, tags: e.tags,
+        incrementKg: e.incrementKg, loadUnit: u, notes: e.notes, tags: e.tags,
         sets: Array.from({ length: Math.max(1, e.sets) }, () => emptySet(load)),
       };
     }),
@@ -58,7 +108,7 @@ interface Props {
   draft: Draft | undefined;
   setDraft: (d: Draft) => void;
   updateProfile: (fn: (p: Profile) => Partial<Profile>) => void;
-  onAskSwap: (exercise: string, pain: number) => void;
+  onAskSwap: (exercise: string, pain: number, site?: string) => void;
   showToast: (msg: string, tone?: 'emerald' | 'amber') => void;
   confirm: (opts: { title: string; message: string; confirmLabel: string; onConfirm: () => void }) => void;
   backupDue: boolean;
@@ -70,13 +120,16 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
   const todayKey = getDayKeyFromDate(today);
   // A draft from an earlier day is stale: start a fresh one for today.
   const draft = useMemo(
-    () => (draftIn && draftIn.date === today ? draftIn : buildDraft(profile, audit, todayKey, today)),
+    () => (draftIn && draftIn.date === today ? normaliseDraft(draftIn) : buildDraft(profile, audit, todayKey, today)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [draftIn, today, profile.id]
   );
   useEffect(() => {
     if (draft !== draftIn) setDraft(draft);
   }, [draft, draftIn, setDraft]);
+  const [guideFor, setGuideFor] = useState<number | null>(null);
+  // Bodyweight exercises in the plan (no load step) do not need the kg/lb switch.
+  const plannedIds = useMemo(() => new Set(Object.values(profile.program).flatMap((d) => d.exercises.map((e) => e.id))), [profile.program]);
 
   const patch = (p: Partial<Draft>) => setDraft({ ...draft, ...p });
   const patchEx = (i: number, fn: (e: DraftExercise) => DraftExercise) =>
@@ -87,6 +140,8 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
   const [slot, setSlot] = useState(slots[0]);
   useEffect(() => { if (!slots.includes(slot)) setSlot(slots[0]); }, [slots, slot]);
   const [foodName, setFoodName] = useState('');
+  const [pickFood, setPickFood] = useState<string | null>(null);
+  const [lastRemoved, setLastRemoved] = useState<{ date: string; item: ProteinItem; index: number } | null>(null);
   const [foodGrams, setFoodGrams] = useState<number | null>(null);
   const items = profile.proteinLogs[today] ?? [];
   const total = items.reduce((s, i) => s + i.grams, 0);
@@ -102,24 +157,57 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
     }
     const item = { id: uid(), mealSlot: slot, name: name.trim().slice(0, 120), grams };
     updateProfile((p) => ({ proteinLogs: { ...p.proteinLogs, [today]: [...(p.proteinLogs[today] ?? []), item] } }));
+    setLastRemoved(null);
     showToast(`Added ${grams} g protein to ${slot}`);
   };
-  const removeFood = (id: string) =>
+  const removeFood = (id: string) => {
+    const index = items.findIndex((i) => i.id === id);
+    if (index >= 0) setLastRemoved({ date: today, item: items[index], index });
     updateProfile((p) => ({ proteinLogs: { ...p.proteinLogs, [today]: (p.proteinLogs[today] ?? []).filter((i) => i.id !== id) } }));
+  };
+  const undoRemove = () => {
+    if (!lastRemoved) return;
+    const { date, item, index } = lastRemoved;
+    updateProfile((p) => {
+      const list = [...(p.proteinLogs[date] ?? [])];
+      list.splice(Math.min(index, list.length), 0, item);
+      return { proteinLogs: { ...p.proteinLogs, [date]: list } };
+    });
+    setLastRemoved(null);
+  };
+  const picked = PROTEIN_FOODS.find((f) => f.food === pickFood) ?? null;
 
   // ---- Logger ----
   const [newEx, setNewEx] = useState('');
   const cap = audit.screening.rpeCap;
   const ready = new Map(audit.progressionReady.map((p) => [p.name.toLowerCase(), p]));
 
+  /** Switches the unit the machine shows. Numbers typed today stay as typed; the choice is remembered in the plan. */
+  const setLoadUnit = (i: number, u: LoadUnit) => {
+    const ex = draft.exercises[i];
+    if (ex.loadUnit === u) return;
+    const incrementKg = u === 'lb' ? 5 * KG_PER_LB : undefined;
+    patchEx(i, (e) => ({ ...e, loadUnit: u, incrementKg }));
+    const key = ex.name.trim().toLowerCase();
+    updateProfile((p) => ({
+      program: Object.fromEntries(
+        Object.entries(p.program).map(([d, plan]) => [d, {
+          ...plan,
+          exercises: plan.exercises.map((x) => (x.name.trim().toLowerCase() === key ? { ...x, loadUnit: u, incrementKg } : x)),
+        }])
+      ) as Profile['program'],
+    }));
+  };
+
   const save = () => {
     const exercises: LoggedExercise[] = draft.exercises
       .map((e) => ({
         exerciseId: e.exerciseId, name: e.name, repMin: e.repMin, repMax: e.repMax, unit: e.unit, targetRpe: e.targetRpe,
-        incrementKg: e.incrementKg, tags: e.tags,
-        sets: e.sets
+        incrementKg: e.incrementKg, loadUnit: e.loadUnit, tags: e.tags,
+        painSite: e.sets.some((s) => (s.pain ?? 0) > 0) ? painSiteOf(e) : undefined,
+        sets: carryLoads(e.sets)
           .filter((s) => (s.reps ?? 0) > 0)
-          .map((s) => ({ loadKg: s.loadKg ?? 0, reps: s.reps ?? 0, rpe: s.rpe, pain: s.pain ?? 0 })),
+          .map((s) => ({ loadKg: s.load ? Math.round(fromUnit(s.load, e.loadUnit) * 1000) / 1000 : 0, reps: s.reps ?? 0, rpe: s.rpe, pain: s.pain ?? 0 })),
       }))
       .filter((e) => e.sets.length > 0);
     if (!exercises.length) {
@@ -215,15 +303,30 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
             );
           })}
         </div>
-        <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-600">Tap to add to {slot}</p>
-        <div className="flex flex-wrap gap-2">
-          {PROTEIN_QUICK_CHIPS.map((c) => (
-            <button key={c.name} type="button" onClick={() => addFood(c.name, c.grams)}
-              className="inline-flex items-center gap-1.5 px-3 min-h-[40px] rounded-full text-sm bg-slate-100 hover:bg-emerald-100 text-slate-800 border border-slate-200">
-              <Plus className="w-3.5 h-3.5 text-emerald-700" aria-hidden /> {c.name} <span className="font-bold text-emerald-800">{c.grams} g</span>
+        <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-600">Tap a food, then pick the size, to add to {slot}</p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Foods">
+          {PROTEIN_FOODS.map((f) => (
+            <button key={f.food} type="button" aria-expanded={pickFood === f.food} onClick={() => setPickFood(pickFood === f.food ? null : f.food)}
+              className={`inline-flex items-center gap-1.5 px-3.5 min-h-[44px] rounded-full text-sm font-semibold border ${pickFood === f.food ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-slate-100 hover:bg-emerald-100 text-slate-800 border-slate-200'}`}>
+              {f.food}
             </button>
           ))}
         </div>
+        {picked && (
+          <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50/60 p-3" role="group" aria-label={`${picked.food} size`}>
+            <p className="text-sm font-bold text-emerald-950">{picked.food}: how much? <span className="font-normal text-slate-700">{picked.hint}</span></p>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {picked.portions.map((po) => (
+                <button key={po.size} type="button" aria-label={`Add ${picked.food} ${po.size.toLowerCase()}, ${po.grams} g protein`}
+                  onClick={() => { addFood(portionLabel(picked, po), po.grams); setPickFood(null); }}
+                  className="flex items-center justify-between gap-2 text-left px-3 py-2 min-h-[52px] rounded-xl bg-white border border-emerald-300 hover:bg-emerald-100">
+                  <span><span className="block text-sm font-bold text-slate-900">{po.size}</span><span className="block text-xs text-slate-600">{po.amount}</span></span>
+                  <span className="shrink-0 text-sm font-extrabold text-emerald-800">+{po.grams} g</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap sm:flex-nowrap gap-2">
           <input type="text" aria-label="Food name" placeholder="Other food (e.g. moong chilla)" value={foodName} onChange={(e) => setFoodName(e.target.value)}
             className="flex-1 min-w-[160px] min-h-[44px] text-sm px-3 rounded-xl border border-slate-300 bg-white" />
@@ -231,15 +334,29 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
           <button type="button" onClick={() => { addFood(foodName, foodGrams); setFoodName(''); setFoodGrams(null); }}
             className="px-4 min-h-[44px] rounded-xl text-sm font-semibold bg-slate-900 text-white">Add</button>
         </div>
+        {lastRemoved && lastRemoved.date === today && (
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-slate-100 border border-slate-200 px-3 py-1.5 text-sm text-slate-800" role="status">
+            <span>Removed {lastRemoved.item.name} ({lastRemoved.item.grams} g).</span>
+            <button type="button" onClick={undoRemove} className="shrink-0 inline-flex items-center gap-1 px-3 min-h-[40px] rounded-lg font-semibold text-emerald-800 hover:bg-emerald-50">
+              <Undo2 className="w-4 h-4" aria-hidden /> Undo
+            </button>
+          </div>
+        )}
         {items.length > 0 && (
-          <ul className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-2">
-            {items.map((i) => (
-              <li key={i.id} className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg text-sm bg-emerald-50 text-emerald-950 border border-emerald-200">
-                <span className="text-xs font-bold uppercase text-emerald-800">{i.mealSlot}:</span> {i.name} <strong>{i.grams} g</strong>
-                <button type="button" onClick={() => removeFood(i.id)} className="p-2 rounded hover:bg-emerald-200" aria-label={`Remove ${i.name}`}><X className="w-3.5 h-3.5" /></button>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Logged today (tap Remove to take one off)</p>
+            <ul className="divide-y divide-slate-100">
+              {items.map((i) => (
+                <li key={i.id} className="flex items-center justify-between gap-2 py-1.5 text-sm text-slate-900">
+                  <span className="min-w-0"><span className="text-xs font-bold uppercase text-emerald-800">{i.mealSlot}</span> {i.name} <strong className="tabular-nums">{i.grams} g</strong></span>
+                  <button type="button" onClick={() => removeFood(i.id)} aria-label={`Remove ${i.name}`}
+                    className="shrink-0 inline-flex items-center gap-1 px-2.5 min-h-[40px] rounded-lg text-sm font-semibold text-rose-800 border border-rose-200 bg-rose-50 hover:bg-rose-100">
+                    <X className="w-4 h-4" aria-hidden /> Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </Card>
 
@@ -249,7 +366,7 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
         <CardHeader
           icon={<Dumbbell className="w-5 h-5" />}
           title="Log a session"
-          subtitle="Fill in what you did. Sets left blank are not saved."
+          subtitle="Fill in what you did. Sets left blank are not saved. Tap Pain ? for how to score pain."
           right={
             <select aria-label="Session template" value={draft.templateKey}
               onChange={(e) => {
@@ -329,16 +446,32 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
                     </p>
                   )}
 
-                  <div className="grid grid-cols-[1.5rem_1fr_1fr_1fr_1fr_2.5rem] gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 px-0.5">
-                    <span>#</span><span>Kg</span><span>{unitLabel}</span><span>RPE</span><span>Pain</span><span />
+                  {ex.unit !== 'min' && (ex.incrementKg !== undefined || ex.loadUnit === 'lb' || ex.sets.some((x) => (x.load ?? 0) > 0) || !plannedIds.has(ex.exerciseId)) && (
+                    <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+                      <span className="font-semibold text-slate-700">Weights marked in</span>
+                      <div className="flex rounded-lg bg-slate-200 p-0.5" role="group" aria-label={`${ex.name} weight unit`}>
+                        {(['kg', 'lb'] as LoadUnit[]).map((u) => (
+                          <button key={u} type="button" aria-pressed={ex.loadUnit === u} onClick={() => setLoadUnit(i, u)}
+                            className={`px-3.5 min-h-[36px] rounded-md text-sm font-bold ${ex.loadUnit === u ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-700'}`}>{u}</button>
+                        ))}
+                      </div>
+                      {ex.loadUnit === 'lb' && <span className="text-xs text-slate-600">Type what the stack shows; saved as kg too.</span>}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-[1.5rem_1fr_1fr_1fr_1fr_2.5rem] gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 px-0.5 items-center">
+                    <span>#</span><span>{ex.loadUnit}</span><span>{unitLabel}</span><span>RPE</span>
+                    <button type="button" onClick={() => setGuideFor(guideFor === i ? null : i)} aria-expanded={guideFor === i} aria-label="How to score pain"
+                      className="inline-flex items-center gap-0.5 text-left uppercase font-bold text-sky-800">Pain <HelpCircle className="w-3.5 h-3.5" aria-hidden /></button>
+                    <span />
                   </div>
+                  {guideFor === i && <PainGuide />}
                   {ex.sets.map((s, j) => {
                     const set = (f: keyof DraftSet, v: number | null) =>
                       patchEx(i, (e) => ({ ...e, sets: e.sets.map((x, k) => (k === j ? { ...x, [f]: v } : x)) }));
                     return (
                       <div key={j} className="grid grid-cols-[1.5rem_1fr_1fr_1fr_1fr_2.5rem] gap-1.5 items-center mt-1.5">
                         <span className="text-sm font-bold text-slate-600">{j + 1}</span>
-                        <NumInput label={`${ex.name} set ${j + 1} load kg`} value={s.loadKg} allowEmpty min={0} max={500} step={0.5} onChange={(v) => set('loadKg', v)} />
+                        <NumInput label={`${ex.name} set ${j + 1} load ${ex.loadUnit}`} value={s.load} allowEmpty min={0} max={ex.loadUnit === 'lb' ? 1000 : 500} step={0.5} onChange={(v) => set('load', v)} />
                         <NumInput label={`${ex.name} set ${j + 1} ${unitLabel.toLowerCase()}`} value={s.reps} allowEmpty min={0} max={600} onChange={(v) => set('reps', v)} className="placeholder:text-slate-400" />
                         <NumInput label={`${ex.name} set ${j + 1} RPE 1 to 10`} value={s.rpe} allowEmpty min={1} max={10} step={0.5} onChange={(v) => set('rpe', v)} />
                         <NumInput label={`${ex.name} set ${j + 1} pain 0 to 10`} value={s.pain} allowEmpty min={0} max={10}
@@ -352,12 +485,37 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
                     );
                   })}
                   <div className="mt-2.5 flex flex-wrap gap-3">
-                    <button type="button" onClick={() => patchEx(i, (e) => ({ ...e, sets: [...e.sets, emptySet(e.sets[e.sets.length - 1]?.loadKg ?? null)] }))}
+                    <button type="button" onClick={() => patchEx(i, (e) => ({ ...e, sets: [...e.sets, emptySet(e.sets[e.sets.length - 1]?.load ?? null)] }))}
                       className="inline-flex items-center gap-1 min-h-[40px] text-sm font-semibold text-emerald-800"><Plus className="w-4 h-4" aria-hidden /> Add set</button>
                     <button type="button"
-                      onClick={() => patchEx(i, (e) => ({ ...e, sets: e.sets.map((x) => ({ ...x, reps: x.reps ?? e.repMax, rpe: x.rpe ?? targetRpe, pain: x.pain ?? 0 })) }))}
+                      onClick={() => patchEx(i, (e) => ({ ...e, sets: carryLoads(e.sets).map((x) => ({ ...x, reps: x.reps ?? e.repMax, rpe: x.rpe ?? targetRpe, pain: x.pain ?? 0 })) }))}
                       className="inline-flex items-center gap-1 min-h-[40px] text-sm font-semibold text-slate-700">Done as planned</button>
                   </div>
+
+                  {maxPain > 0 && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                      <p className="text-sm font-bold text-slate-900">Where does it hurt?</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label={`${ex.name} pain side`}>
+                        {PAIN_SIDES.map((sd) => (
+                          <button key={sd} type="button" aria-pressed={ex.painSide === sd} onClick={() => patchEx(i, (e) => ({ ...e, painSide: e.painSide === sd ? undefined : sd }))}
+                            className={`px-3 min-h-[40px] rounded-lg text-sm font-semibold border ${ex.painSide === sd ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-800 border-slate-300'}`}>{sd}</button>
+                        ))}
+                      </div>
+                      <select aria-label={`${ex.name} pain area`} value={ex.painArea ?? ''} onChange={(e) => patchEx(i, (x) => ({ ...x, painArea: e.target.value || undefined }))}
+                        className="mt-2 w-full min-h-[44px] px-3 rounded-lg border border-slate-300 bg-white text-sm font-semibold">
+                        <option value="">Choose the body part…</option>
+                        {PAIN_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                      {ex.painArea === 'Chest' && (
+                        <p className="mt-2 text-sm font-semibold rounded-lg px-2.5 py-1.5 bg-rose-100 text-rose-900" role="alert">
+                          Chest pain, pressure or tightness during exercise is a warning sign, not a training pain. Stop now and get medical advice today. If it is severe, or comes with breathlessness, sweating, or arm or jaw pain, call emergency services (112).
+                        </p>
+                      )}
+                      {maxPain <= 3 && ex.painArea !== 'Chest' && (
+                        <p className="mt-2 text-sm text-emerald-900">Mild pain ({maxPain}/10): fine to carry on if it settles by tomorrow morning and is no worse next session.</p>
+                      )}
+                    </div>
+                  )}
 
                   {maxPain > 3 && (
                     <div className={`mt-3 rounded-xl p-3.5 border ${maxPain > 5 ? 'bg-rose-50 border-rose-300 text-rose-950' : 'bg-amber-50 border-amber-300 text-amber-950'}`} role="alert">
@@ -366,7 +524,7 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
                       <ol className="mt-2 space-y-1 text-sm list-decimal list-inside">
                         <li>Change range, grip or stance</li><li>Slow the tempo or switch to an isometric hold</li><li>Reduce load or sets</li><li>Swap to a pain-free alternative</li>
                       </ol>
-                      <button type="button" onClick={() => onAskSwap(ex.name, maxPain)} className="mt-3 inline-flex items-center gap-1.5 px-3 min-h-[40px] rounded-lg text-sm font-semibold bg-slate-900 text-white">
+                      <button type="button" onClick={() => onAskSwap(ex.name, maxPain, painSiteOf(ex))} className="mt-3 inline-flex items-center gap-1.5 px-3 min-h-[40px] rounded-lg text-sm font-semibold bg-slate-900 text-white">
                         <Bot className="w-4 h-4" aria-hidden /> Ask the coach for a swap
                       </button>
                     </div>
@@ -384,7 +542,7 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
           <button id="add-ex-btn" type="button"
             onClick={() => {
               if (!newEx.trim()) return;
-              patch({ exercises: [...draft.exercises, { exerciseId: uid(), name: newEx.trim(), repMin: 8, repMax: 12, unit: 'reps', targetRpe: 7, tags: inferRiskTags(newEx), sets: [emptySet(null)] }] });
+              patch({ exercises: [...draft.exercises, { exerciseId: uid(), name: newEx.trim(), repMin: 8, repMax: 12, unit: 'reps', targetRpe: 7, loadUnit: 'kg', tags: inferRiskTags(newEx), sets: [emptySet(null)] }] });
               setNewEx('');
             }}
             className="shrink-0 px-4 min-h-[44px] rounded-xl text-sm font-semibold bg-slate-100 text-slate-900 border border-slate-300">+ Exercise</button>
