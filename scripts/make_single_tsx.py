@@ -55,7 +55,7 @@ for rel in ORDER:
     src = re.sub(r'^export (default )?', '', src, flags=re.M)
     bodies.append(f'// ===== {rel} =====\n{src.strip()}\n')
 
-react_names = sorted(ext['react'])
+react_names = [f'type {n}' if n in ('ReactNode',) else n for n in sorted(ext['react'])]
 header = f"""/**
  * EvidenceFit: evidence-based exercise and protein companion (single-file build for Gemini Canvas).
  * Generated from the EvidenceFit source by scripts/make_single_tsx.py; edit the source, not this file.
