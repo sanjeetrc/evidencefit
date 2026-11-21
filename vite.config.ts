@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => ({
                 { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
               ],
             },
-            workbox: { globPatterns: ['**/*.{js,css,html,svg,png}'] },
+            workbox: { globPatterns: ['**/*.{js,css,html,svg,png}'], skipWaiting: true, clientsClaim: true, cleanupOutdatedCaches: true },
           }),
         ],
   build: { outDir: mode === 'single' ? 'dist-single' : 'dist' },
