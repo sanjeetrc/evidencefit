@@ -91,6 +91,7 @@ function parseProgramExercise(v: unknown): ProgramExercise | null {
     notes: str(v.notes),
     incrementKg: numOrNull(v.incrementKg, 0.25, 20) ?? undefined,
     loadUnit: loadUnit(v.loadUnit),
+    perSide: typeof v.perSide === 'boolean' ? v.perSide : undefined,
     tags: Array.isArray(v.tags) ? (v.tags.filter((t) => typeof t === 'string') as ProgramExercise['tags']) : undefined,
     why: typeof v.why === 'string' ? v.why : undefined,
     tier: typeof v.tier === 'string' ? (v.tier as ProgramExercise['tier']) : undefined,
@@ -116,7 +117,7 @@ function parseProgram(v: unknown): Program {
 
 function parseSet(v: unknown): LoggedSet | null {
   if (!isObj(v)) return null;
-  return { loadKg: num(v.loadKg, 0, 0, 1000), reps: num(v.reps, 0, 0, 1000), rpe: clampRpe(v.rpe), pain: clampPain(v.pain), notes: str(v.notes) };
+  return { loadKg: num(v.loadKg, 0, 0, 1000), reps: num(v.reps, 0, 0, 1000), rpe: clampRpe(v.rpe), pain: clampPain(v.pain), ...(v.side === 'L' || v.side === 'R' ? { side: v.side } : {}), notes: str(v.notes) };
 }
 
 function parseLoggedExercise(v: unknown): LoggedExercise | null {

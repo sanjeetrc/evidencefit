@@ -3,6 +3,7 @@ export type DayKey = (typeof DAYS_OF_WEEK)[number];
 
 export type Unit = 'reps' | 'sec' | 'min';
 export type LoadUnit = 'kg' | 'lb';
+export type Side = 'L' | 'R';
 export type Location = 'Gym' | 'Home' | 'Outdoor' | 'Rest';
 export type Climate = 'Normal' | 'Hot/Humid';
 export type MealPattern = '2-meal' | '3-meal';
@@ -31,6 +32,8 @@ export interface ProgramExercise {
   incrementKg?: number;
   /** Unit printed on this machine or dumbbell. Loads are stored in kg regardless. */
   loadUnit?: LoadUnit;
+  /** Log left and right as separate sets. Undefined = decide from the name. */
+  perSide?: boolean;
   tags?: RiskTag[];
   why?: string;
   tier?: EvidenceTier;
@@ -49,6 +52,8 @@ export interface LoggedSet {
   reps: number;
   rpe: number | null;
   pain: number;
+  /** Set for one-sided exercises logged per side. */
+  side?: Side;
   notes?: string;
 }
 

@@ -129,7 +129,7 @@ export function TrendsTab({ profile, audit, isDemoLoaded, onClearDemo, updatePro
               <li key={w.id} className="py-2.5 flex items-start justify-between gap-2">
                 <div className="text-sm">
                   <p className="font-bold text-slate-900">{shortDateLabel(w.date)} · {w.title}</p>
-                  <p className="text-slate-700">{w.exercises.map((e) => `${e.name} ${e.sets.length}×`).join(', ')}</p>
+                  <p className="text-slate-700">{w.exercises.map((e) => `${e.name} ${e.sets.some((s) => s.side) ? `${Math.max(e.sets.filter((s) => s.side === 'L').length, e.sets.filter((s) => s.side === 'R').length)}× each side` : `${e.sets.length}×`}`).join(', ')}</p>
                   {(w.sleepHours !== null || w.notes) && <p className="text-slate-600">{w.sleepHours !== null ? `Sleep ${w.sleepHours} h. ` : ''}{w.notes}</p>}
                 </div>
                 <button type="button" aria-label={`Delete session ${w.title} on ${w.date}`} className="p-2.5 text-slate-500 hover:text-rose-700"

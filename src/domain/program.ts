@@ -42,6 +42,14 @@ const pushDown = () =>
     why: 'Direct triceps work. Push-ups and presses already train it, so 2 sets twice a week is enough.', tier: 'Coaching Convention',
   });
 
+export const BAND_PUSH_DOWN_NAME = 'Band triceps push-down';
+const bandPushDown = () =>
+  ex({
+    name: BAND_PUSH_DOWN_NAME, sets: 2, repMin: 12, repMax: 15, unit: 'reps', targetRpe: 7.5, restSec: 60,
+    notes: 'Loop the band over the top of a closed door or a sturdy hook. Elbows pinned to your sides; straighten fully, return slowly. Step back or use a thicker band when 15 is easy.',
+    why: 'Home version of the gym push-down, so triceps get trained four days a week in small doses.', tier: 'Coaching Convention',
+  });
+
 const gymA = (): DayPlan => ({
   title: 'Gym A — Power, legs, hinge, push-pull, carry, easy walk',
   location: 'Gym',
@@ -123,6 +131,7 @@ const home = (): DayPlan => ({
     ex({ name: 'Dumbbell one-arm row', sets: 2, repMin: 10, repMax: 12, unit: 'reps', targetRpe: 7.5, restSec: 60, incrementKg: 1, notes: 'Free hand on a sturdy chair.' }),
     ex({ name: 'Seated dumbbell overhead press', sets: 2, repMin: 10, repMax: 12, unit: 'reps', targetRpe: 7.5, restSec: 60, incrementKg: 1, notes: 'Exhale as you press. Stop short of any shoulder pinch.' }),
     ex({ name: 'Dumbbell biceps curl', sets: 2, repMin: 10, repMax: 12, unit: 'reps', targetRpe: 7.5, restSec: 60, incrementKg: 1, notes: 'No swinging.' }),
+    bandPushDown(),
     ex({
       name: 'Wall sit, isometric (BP protocol)', sets: 4, repMin: 120, repMax: 120, unit: 'sec', targetRpe: 6.5, restSec: 90,
       notes: 'Moderate effort: set the depth so 2 min is hard but doable. Breathe continuously.',
@@ -174,15 +183,32 @@ export const inferRiskTags = (name: string): RiskTag[] => {
 };
 
 /** Bump when the built-in plan gains or renames exercises. */
-export const PROGRAM_VERSION = 2;
+export const PROGRAM_VERSION = 3;
+
+/** One-sided exercises are logged as separate left and right sets. */
+export const isOneSided = (e: { name: string; perSide?: boolean }) =>
+  e.perSide ?? /each (leg|side|arm)|one-?arm|single-?(leg|arm)|step-?up|lunge|split squat|bird-?dog|side plank/i.test(e.name);
 
 /**
  * Upgrades a saved plan in place without touching the user's own edits:
  * v1 → v2 renames the incline push-up and adds a triceps push-down after it.
  */
 export function upgradeProgram(program: Program, fromVersion: number): Program {
-  if (fromVersion >= 2) return program;
+  if (fromVersion >= 3) return program;
   const out = { ...program };
+  // v2 → v3: band push-down on home days (after the curl, else after the overhead press).
+  for (const day of Object.keys(out) as (keyof Program)[]) {
+    const plan = out[day];
+    if (plan.location !== 'Home' || plan.exercises.some((e) => /push-?down/i.test(e.name))) continue;
+    let idx = plan.exercises.findIndex((e) => /biceps curl/i.test(e.name));
+    if (idx < 0) idx = plan.exercises.findIndex((e) => /overhead press/i.test(e.name));
+    if (idx < 0) continue;
+    const exercises = [...plan.exercises];
+    const b = bandPushDown();
+    exercises.splice(idx + 1, 0, { ...b, id: `${b.id}_${day}_${Date.now().toString(36)}` });
+    out[day] = { ...plan, exercises };
+  }
+  if (fromVersion >= 2) return out;
   for (const day of Object.keys(out) as (keyof Program)[]) {
     const plan = out[day];
     const idx = plan.exercises.findIndex((e) => e.name === 'Incline push-up (bench)');

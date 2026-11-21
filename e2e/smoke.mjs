@@ -82,6 +82,10 @@ try {
   await page.getByLabel('Session template').selectOption('Tue');
   const surya = page.getByRole('article', { name: /Surya Namaskar/ });
   check('J4 glaucoma flags Surya Namaskar', await surya.getByText(/Avoid: Head-down/).isVisible());
+  const row = page.getByRole('article', { name: 'Dumbbell one-arm row' });
+  check('J4 one-arm row has separate left and right sets',
+    (await row.getByLabel('Dumbbell one-arm row set 1 left reps').count()) === 1 && (await row.getByLabel('Dumbbell one-arm row set 2 right reps').count()) === 1);
+  check('J4 band triceps push-down on the home day', (await page.getByRole('article', { name: 'Band triceps push-down' }).count()) === 1);
   await page.getByLabel('Session template').selectOption('Wed');
   const intervals = page.getByRole('article', { name: /Intervals/ });
   check('J4 intervals blocked until cleared', await intervals.getByText(/Avoid: Vigorous/).isVisible());

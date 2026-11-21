@@ -78,6 +78,14 @@ Android install evidence (Chromium, Pixel 7 emulation): manifest errors none; in
 
 Evidence: 52 unit tests (new AC-11 units, AC-12 plan upgrade, AC-13 portions and pain), 28/28 phone end-to-end checks.
 
+## Release 1.2 (2026-11-21): owner's answers to the 1.1 questions
+
+- **Left and right logged separately** for one-sided exercises (step-up, one-arm row, single-leg balance, bird-dog, and any custom exercise named "each leg", "one-arm", "single-leg", lunge, etc.). Rows show 1L, 1R, 2L, 2R; progression needs both sides at the top of the range. Pain on a left/right row pre-selects that side. Per-exercise override in the plan ("Log left and right sides separately"). Side is saved, exported to CSV and sent to the coach.
+- **Band triceps push-down on home days** (Tue/Thu), 2 × 12–15 at RPE 7.5, after the biceps curl. Direct triceps work is now 8 sets a week in total (gym cable 4 + home band 4), within a 60+ weekly range alongside pressing. Saved plans upgrade in place (programVersion 3).
+- **AI coach (Gemini) kept** as an optional extra: off by default, needs consent and the owner's own key, local summary when off. Decision D-open closed.
+
+Evidence: 56 unit tests (AC-14 added), 30/30 phone end-to-end checks.
+
 ## Backup and restore (runbook)
 - Settings → *Download backup* (all people). The app nags after 14 days. Keep copies in Google Drive.
 - Restore: Settings → *Restore from backup* → confirm. Accepts prototype (v1) backups.

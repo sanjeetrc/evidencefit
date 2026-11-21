@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Award, Calendar, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Audit, exerciseWarnings } from '../domain/engine';
-import { buildDefaultProgram, inferRiskTags } from '../domain/program';
+import { buildDefaultProgram, inferRiskTags, isOneSided } from '../domain/program';
 import { formatDateISO, shortDateLabel } from '../domain/dates';
 import { uid } from '../domain/state';
 import { Benchmark, DAYS_OF_WEEK, DayKey, DayPlan, LoadUnit, Location, Profile, ProgramExercise, Unit } from '../domain/types';
@@ -130,6 +130,10 @@ export function ProgramTab({ profile, audit, updateProfile, showToast, confirm }
                       allowEmpty min={0.25} max={ex.loadUnit === 'lb' ? 40 : 20} step={0.25}
                       onChange={(v) => setEx(ex.id, { incrementKg: v === null ? undefined : fromUnit(v, ex.loadUnit ?? 'kg') })} /></label>
                 </div>
+                <label className="flex items-center gap-2.5 min-h-[44px] text-sm font-semibold text-slate-800">
+                  <input type="checkbox" className="w-5 h-5 accent-emerald-700" checked={isOneSided(ex)} onChange={(e) => setEx(ex.id, { perSide: e.target.checked })} />
+                  Log left and right sides separately
+                </label>
                 <input type="text" aria-label="Coaching cue" placeholder="Coaching cue" value={ex.notes} onChange={(e) => setEx(ex.id, { notes: e.target.value })}
                   className="w-full text-sm px-3 min-h-[40px] rounded-lg border border-slate-300 bg-white" />
               </div>

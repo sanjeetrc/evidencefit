@@ -6,14 +6,14 @@ import { Audit, exerciseWarnings, mealSlotsFor } from '../domain/engine';
 import { formatDateISO, getDayKeyFromDate, shortDateLabel } from '../domain/dates';
 import { PAIN_AREAS, PAIN_SCALE, PAIN_SIDES, PROTEIN_FOODS, portionLabel } from '../domain/reference';
 import { KG_PER_LB, displayLoad, fromUnit } from '../domain/units';
-import { inferRiskTags } from '../domain/program';
+import { inferRiskTags, isOneSided } from '../domain/program';
 import { isDuplicateWorkout, uid } from '../domain/state';
-import { Climate, DAYS_OF_WEEK, DayKey, LoadUnit, Location, LoggedExercise, Profile, ProteinItem, RiskTag, Unit, Workout } from '../domain/types';
+import { Climate, DAYS_OF_WEEK, DayKey, LoadUnit, Side, Location, LoggedExercise, Profile, ProteinItem, RiskTag, Unit, Workout } from '../domain/types';
 import { Card, CardHeader, NumInput } from './common';
 import { Timer } from './Timer';
 
 /** `load` is in the exercise's own unit (kg or lb), exactly as typed; converted to kg on save. */
-export interface DraftSet { load: number | null; reps: number | null; rpe: number | null; pain: number | null }
+export interface DraftSet { load: number | null; reps: number | null; rpe: number | null; pain: number | null; side?: Side }
 export interface DraftExercise {
   exerciseId: string; name: string; repMin: number; repMax: number; unit: Unit; targetRpe: number;
   incrementKg?: number; loadUnit: LoadUnit; notes?: string; tags?: RiskTag[]; sets: DraftSet[];
@@ -24,7 +24,18 @@ export interface Draft {
   sleepHours: number | null; restingHr: number | null; climate: Climate; exercises: DraftExercise[];
 }
 
-const emptySet = (load: number | null): DraftSet => ({ load, reps: null, rpe: null, pain: null });
+const emptySet = (load: number | null, side?: Side): DraftSet => ({ load, reps: null, rpe: null, pain: null, ...(side ? { side } : {}) });
+/** One planned set; a left and a right row for one-sided exercises. */
+const plannedSet = (load: number | null, perSide: boolean): DraftSet[] => (perSide ? [emptySet(load, 'L'), emptySet(load, 'R')] : [emptySet(load)]);
+
+/** Row label: "1" or "1L" / "1R". */
+const rowLabels = (sets: DraftSet[]) => {
+  let n = 0;
+  return sets.map((s) => {
+    if (s.side !== 'R') n += 1;
+    return { short: s.side ? `${n}${s.side}` : `${n}`, long: s.side ? `set ${n} ${s.side === 'L' ? 'left' : 'right'}` : `set ${n}` };
+  });
+};
 
 /** Drafts saved by the previous version stored `loadKg` and had no unit. */
 function normaliseDraft(d: Draft): Draft {
@@ -96,7 +107,7 @@ export function buildDraft(profile: Profile, audit: Audit, key: DayKey | 'Custom
       return {
         exerciseId: e.id, name: e.name, repMin: e.repMin, repMax: e.repMax, unit: e.unit, targetRpe: e.targetRpe,
         incrementKg: e.incrementKg, loadUnit: u, notes: e.notes, tags: e.tags,
-        sets: Array.from({ length: Math.max(1, e.sets) }, () => emptySet(load)),
+        sets: Array.from({ length: Math.max(1, e.sets) }, () => plannedSet(load, isOneSided(e))).flat(),
       };
     }),
   };
@@ -207,7 +218,7 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
         painSite: e.sets.some((s) => (s.pain ?? 0) > 0) ? painSiteOf(e) : undefined,
         sets: carryLoads(e.sets)
           .filter((s) => (s.reps ?? 0) > 0)
-          .map((s) => ({ loadKg: s.load ? Math.round(fromUnit(s.load, e.loadUnit) * 1000) / 1000 : 0, reps: s.reps ?? 0, rpe: s.rpe, pain: s.pain ?? 0 })),
+          .map((s) => ({ loadKg: s.load ? Math.round(fromUnit(s.load, e.loadUnit) * 1000) / 1000 : 0, reps: s.reps ?? 0, rpe: s.rpe, pain: s.pain ?? 0, ...(s.side ? { side: s.side } : {}) })),
       }))
       .filter((e) => e.sets.length > 0);
     if (!exercises.length) {
@@ -466,26 +477,32 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
                   </div>
                   {guideFor === i && <PainGuide />}
                   {ex.sets.map((s, j) => {
+                    const lbl = rowLabels(ex.sets)[j];
                     const set = (f: keyof DraftSet, v: number | null) =>
-                      patchEx(i, (e) => ({ ...e, sets: e.sets.map((x, k) => (k === j ? { ...x, [f]: v } : x)) }));
+                      patchEx(i, (e) => ({
+                        ...e,
+                        // Pain on a left or right row pre-selects that side.
+                        painSide: f === 'pain' && (v ?? 0) > 0 && s.side && !e.painSide ? (s.side === 'L' ? 'Left' : 'Right') : e.painSide,
+                        sets: e.sets.map((x, k) => (k === j ? { ...x, [f]: v } : x)),
+                      }));
                     return (
                       <div key={j} className="grid grid-cols-[1.5rem_1fr_1fr_1fr_1fr_2.5rem] gap-1.5 items-center mt-1.5">
-                        <span className="text-sm font-bold text-slate-600">{j + 1}</span>
-                        <NumInput label={`${ex.name} set ${j + 1} load ${ex.loadUnit}`} value={s.load} allowEmpty min={0} max={ex.loadUnit === 'lb' ? 1000 : 500} step={0.5} onChange={(v) => set('load', v)} />
-                        <NumInput label={`${ex.name} set ${j + 1} ${unitLabel.toLowerCase()}`} value={s.reps} allowEmpty min={0} max={600} onChange={(v) => set('reps', v)} className="placeholder:text-slate-400" />
-                        <NumInput label={`${ex.name} set ${j + 1} RPE 1 to 10`} value={s.rpe} allowEmpty min={1} max={10} step={0.5} onChange={(v) => set('rpe', v)} />
-                        <NumInput label={`${ex.name} set ${j + 1} pain 0 to 10`} value={s.pain} allowEmpty min={0} max={10}
+                        <span className={`text-sm font-bold ${s.side === 'R' ? 'text-sky-800' : s.side === 'L' ? 'text-violet-800' : 'text-slate-600'}`}>{lbl.short}</span>
+                        <NumInput label={`${ex.name} ${lbl.long} load ${ex.loadUnit}`} value={s.load} allowEmpty min={0} max={ex.loadUnit === 'lb' ? 1000 : 500} step={0.5} onChange={(v) => set('load', v)} />
+                        <NumInput label={`${ex.name} ${lbl.long} ${unitLabel.toLowerCase()}`} value={s.reps} allowEmpty min={0} max={600} onChange={(v) => set('reps', v)} className="placeholder:text-slate-400" />
+                        <NumInput label={`${ex.name} ${lbl.long} RPE 1 to 10`} value={s.rpe} allowEmpty min={1} max={10} step={0.5} onChange={(v) => set('rpe', v)} />
+                        <NumInput label={`${ex.name} ${lbl.long} pain 0 to 10`} value={s.pain} allowEmpty min={0} max={10}
                           className={(s.pain ?? 0) > 5 ? 'border-rose-500 bg-rose-50 text-rose-800' : (s.pain ?? 0) > 3 ? 'border-amber-500 bg-amber-50' : ''}
                           onChange={(v) => set('pain', v)} />
                         {ex.sets.length > 1 ? (
                           <button type="button" onClick={() => patchEx(i, (e) => ({ ...e, sets: e.sets.filter((_, k) => k !== j) }))}
-                            className="p-2.5 text-slate-500 hover:text-rose-700" aria-label={`Remove set ${j + 1}`}><X className="w-4 h-4" /></button>
+                            className="p-2.5 text-slate-500 hover:text-rose-700" aria-label={`Remove ${lbl.long}`}><X className="w-4 h-4" /></button>
                         ) : <span />}
                       </div>
                     );
                   })}
                   <div className="mt-2.5 flex flex-wrap gap-3">
-                    <button type="button" onClick={() => patchEx(i, (e) => ({ ...e, sets: [...e.sets, emptySet(e.sets[e.sets.length - 1]?.load ?? null)] }))}
+                    <button type="button" onClick={() => patchEx(i, (e) => ({ ...e, sets: [...e.sets, ...plannedSet(e.sets[e.sets.length - 1]?.load ?? null, e.sets.some((x) => x.side))] }))}
                       className="inline-flex items-center gap-1 min-h-[40px] text-sm font-semibold text-emerald-800"><Plus className="w-4 h-4" aria-hidden /> Add set</button>
                     <button type="button"
                       onClick={() => patchEx(i, (e) => ({ ...e, sets: carryLoads(e.sets).map((x) => ({ ...x, reps: x.reps ?? e.repMax, rpe: x.rpe ?? targetRpe, pain: x.pain ?? 0 })) }))}
@@ -542,7 +559,7 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
           <button id="add-ex-btn" type="button"
             onClick={() => {
               if (!newEx.trim()) return;
-              patch({ exercises: [...draft.exercises, { exerciseId: uid(), name: newEx.trim(), repMin: 8, repMax: 12, unit: 'reps', targetRpe: 7, loadUnit: 'kg', tags: inferRiskTags(newEx), sets: [emptySet(null)] }] });
+              patch({ exercises: [...draft.exercises, { exerciseId: uid(), name: newEx.trim(), repMin: 8, repMax: 12, unit: 'reps', targetRpe: 7, loadUnit: 'kg', tags: inferRiskTags(newEx), sets: plannedSet(null, isOneSided({ name: newEx })) }] });
               setNewEx('');
             }}
             className="shrink-0 px-4 min-h-[44px] rounded-xl text-sm font-semibold bg-slate-100 text-slate-900 border border-slate-300">+ Exercise</button>

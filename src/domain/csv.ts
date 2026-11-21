@@ -11,11 +11,11 @@ export const cell = (v: unknown): string => {
 const row = (xs: unknown[]) => xs.map(cell).join(',');
 
 export function workoutsCsv(p: Profile): string {
-  const out = [row(['Date', 'Title', 'Location', 'SleepHrs', 'RestingHR', 'Climate', 'Exercise', 'Set', 'LoadKg', 'LoadAsShown', 'LoadUnit', 'RepsOrDuration', 'Unit', 'RPE', 'Pain', 'PainSite'])];
+  const out = [row(['Date', 'Title', 'Location', 'SleepHrs', 'RestingHR', 'Climate', 'Exercise', 'Set', 'Side', 'LoadKg', 'LoadAsShown', 'LoadUnit', 'RepsOrDuration', 'Unit', 'RPE', 'Pain', 'PainSite'])];
   for (const w of [...p.workouts].sort((a, b) => a.date.localeCompare(b.date))) {
     for (const e of w.exercises) {
       e.sets.forEach((s, i) =>
-        out.push(row([w.date, w.title, w.location, w.sleepHours, w.restingHr, w.climate, e.name, i + 1, Math.round(s.loadKg * 100) / 100, displayLoad(s.loadKg, e.loadUnit ?? 'kg'), e.loadUnit ?? 'kg', s.reps, e.unit, s.rpe, s.pain, s.pain > 0 ? e.painSite ?? '' : '']))
+        out.push(row([w.date, w.title, w.location, w.sleepHours, w.restingHr, w.climate, e.name, i + 1, s.side === 'L' ? 'Left' : s.side === 'R' ? 'Right' : '', Math.round(s.loadKg * 100) / 100, displayLoad(s.loadKg, e.loadUnit ?? 'kg'), e.loadUnit ?? 'kg', s.reps, e.unit, s.rpe, s.pain, s.pain > 0 ? e.painSite ?? '' : '']))
       );
     }
   }

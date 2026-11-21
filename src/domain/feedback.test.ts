@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runAudit } from './engine';
 import { createBlankProfile, parseState } from './state';
-import { PROGRAM_VERSION, PUSH_DOWN_NAME, PUSH_UP_NAME, buildDefaultProgram } from './program';
+import { BAND_PUSH_DOWN_NAME, PROGRAM_VERSION, PUSH_DOWN_NAME, PUSH_UP_NAME, buildDefaultProgram, isOneSided } from './program';
 import { PAIN_AREAS, PAIN_SCALE, PROTEIN_FOODS, portionLabel } from './reference';
 import { KG_PER_LB, defaultIncrementKg, displayLoad, formatLoad, fromUnit } from './units';
 import { workoutsCsv } from './csv';
@@ -109,5 +109,51 @@ describe('AC-13 protein portions and pain records', () => {
     expect(csv.split('\n')[0]).toContain('PainSite');
     expect(csv).toContain(',100,lb,');
     expect(csv).toContain('Left knee');
+  });
+});
+
+describe('AC-14 second round: left/right sets, home push-downs', () => {
+  it('AC-14.1 one-sided exercises are detected; two-sided ones are not', () => {
+    const all = Object.values(buildDefaultProgram()).flatMap((d) => d.exercises);
+    const sided = [...new Set(all.filter(isOneSided).map((e) => e.name))].sort();
+    expect(sided).toEqual(['Bird-dog', 'Dumbbell one-arm row', 'Fast step-up (power, each leg)', 'Single-leg balance near a counter']);
+    expect(isOneSided({ name: 'Walking lunge' })).toBe(true);
+    expect(isOneSided({ name: 'Leg press' })).toBe(false);
+    expect(isOneSided({ name: 'Leg press', perSide: true })).toBe(true);
+    expect(isOneSided({ name: 'Bird-dog', perSide: false })).toBe(false);
+  });
+  it('AC-14.2 band push-down on both home days; direct triceps 8 sets a week in total', () => {
+    const prog = buildDefaultProgram();
+    for (const d of ['Tue', 'Thu'] as const) expect(prog[d].exercises.map((e) => e.name)).toContain(BAND_PUSH_DOWN_NAME);
+    const tri = Object.values(prog).flatMap((d) => d.exercises).filter((e) => /push-?down/i.test(e.name));
+    expect(tri.reduce((s, e) => s + e.sets, 0)).toBe(8);
+  });
+  it('AC-14.3 a saved v2 plan gains the band push-down once on home days, nowhere else', () => {
+    const prog = buildDefaultProgram();
+    for (const d of ['Tue', 'Thu'] as const) prog[d].exercises = prog[d].exercises.filter((e) => e.name !== BAND_PUSH_DOWN_NAME);
+    const r = parseState({ version: 2, profiles: [{ name: 'T', programVersion: 2, program: prog }] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const p = r.state.profiles[0].program;
+    for (const d of ['Tue', 'Thu'] as const) {
+      const names = p[d].exercises.map((e) => e.name);
+      expect(names.filter((n) => n === BAND_PUSH_DOWN_NAME)).toHaveLength(1);
+      expect(names.indexOf(BAND_PUSH_DOWN_NAME)).toBe(names.indexOf('Dumbbell biceps curl') + 1);
+    }
+    expect(p.Mon.exercises.map((e) => e.name)).not.toContain(BAND_PUSH_DOWN_NAME);
+    expect(PROGRAM_VERSION).toBe(3);
+  });
+  it('AC-14.4 the side of each set survives a reload and reaches the CSV', () => {
+    const e: LoggedExercise = {
+      exerciseId: 'r', name: 'Dumbbell one-arm row', repMin: 10, repMax: 12, unit: 'reps', targetRpe: 7.5,
+      sets: [{ loadKg: 10, reps: 12, rpe: 7, pain: 0, side: 'L' }, { loadKg: 10, reps: 11, rpe: 7.5, pain: 0, side: 'R' }],
+    };
+    const r = parseState({ version: 2, profiles: [{ name: 'T', workouts: [w(1, e)] }] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.profiles[0].workouts[0].exercises[0].sets.map((s) => s.side)).toEqual(['L', 'R']);
+    const csv = workoutsCsv(r.state.profiles[0]);
+    expect(csv).toContain(',1,Left,');
+    expect(csv).toContain(',2,Right,');
   });
 });
