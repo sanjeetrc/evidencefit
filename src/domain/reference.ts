@@ -1,72 +1,82 @@
 import { ConditionKey, MedicationKey, RedFlagKey } from './types';
 
 export interface Portion { size: string; amount: string; grams: number }
-export interface ProteinFood { food: string; hint: string; portions: Portion[] }
+export interface ProteinFood {
+  food: string;
+  hint: string;
+  /** What one item is called: piece, egg, katori, glass… */
+  noun: string;
+  nounPlural: string;
+  portions: Portion[];
+}
 
 /**
- * Protein per portion, cooked weight unless stated. Values are typical
- * food-table figures rounded to the gram; real pieces vary by ±20%.
+ * Protein for ONE piece or serving, cooked and edible weight (bone and shell
+ * excluded). Typical Indian home portions; estimates, real pieces vary ±25%.
+ * Protein density used: fish 23 g, chicken 27 g, prawns 24 g, paneer 18 g per 100 g.
  */
 export const PROTEIN_FOODS: ProteinFood[] = [
-  { food: 'Fish', hint: 'Cooked piece, any white fish or pomfret', portions: [
-    { size: 'Small', amount: 'half a palm, about 50 g', grams: 12 },
-    { size: 'Medium', amount: 'size of your palm, about 100 g', grams: 25 },
-    { size: 'Large', amount: 'palm and a half, about 150 g', grams: 37 },
+  { food: 'Fish', hint: 'One curry or fry piece (surmai, pomfret, rawas…)', noun: 'piece', nounPlural: 'pieces', portions: [
+    { size: 'Small', amount: 'about 40 g fish', grams: 9 },
+    { size: 'Medium', amount: 'about 60 g fish', grams: 14 },
+    { size: 'Large', amount: 'about 90 g fish', grams: 21 },
   ] },
-  { food: 'Chicken', hint: 'Cooked, counting the meat only', portions: [
-    { size: 'Small', amount: '2 curry pieces, about 50 g meat', grams: 13 },
-    { size: 'Medium', amount: '4 curry pieces or a palm of boneless, about 100 g', grams: 25 },
-    { size: 'Large', amount: '6 curry pieces, about 150 g meat', grams: 37 },
+  { food: 'Chicken', hint: 'One curry piece, counting the meat only (not bone)', noun: 'piece', nounPlural: 'pieces', portions: [
+    { size: 'Small', amount: 'wing or small piece, about 25 g meat', grams: 7 },
+    { size: 'Medium', amount: 'regular curry piece, about 40 g meat', grams: 11 },
+    { size: 'Large', amount: 'leg, thigh or breast piece, about 60 g meat', grams: 16 },
   ] },
-  { food: 'Prawns', hint: 'Cooked, shelled', portions: [
-    { size: 'Small', amount: 'about 6 medium prawns, 50 g', grams: 12 },
-    { size: 'Medium', amount: 'about 12 medium prawns, 100 g', grams: 24 },
-    { size: 'Large', amount: 'about 18 medium prawns, 150 g', grams: 36 },
+  { food: 'Prawns', hint: 'One prawn, shelled and cooked', noun: 'prawn', nounPlural: 'prawns', portions: [
+    { size: 'Small', amount: 'about 5 g', grams: 1 },
+    { size: 'Medium', amount: 'about 10 g', grams: 2.5 },
+    { size: 'Large', amount: 'tiger prawn, about 25 g', grams: 6 },
   ] },
-  { food: 'Eggs', hint: 'Whole eggs', portions: [
-    { size: '1 egg', amount: 'one whole egg', grams: 6 },
-    { size: '2 eggs', amount: 'two whole eggs', grams: 12 },
-    { size: '3 eggs', amount: 'three whole eggs', grams: 18 },
+  { food: 'Paneer', hint: 'One piece of paneer', noun: 'piece', nounPlural: 'pieces', portions: [
+    { size: 'Small', amount: 'small cube in a curry, about 10 g', grams: 2 },
+    { size: 'Medium', amount: 'bigger cube, about 15 g', grams: 3 },
+    { size: 'Large', amount: 'tikka piece or slice, about 25 g', grams: 5 },
   ] },
-  { food: 'Paneer', hint: 'Fresh paneer', portions: [
-    { size: 'Small', amount: 'about 4 cubes, 50 g', grams: 9 },
-    { size: 'Medium', amount: 'about 8 cubes, 100 g', grams: 18 },
-    { size: 'Large', amount: 'about 12 cubes, 150 g', grams: 27 },
+  { food: 'Eggs', hint: 'Whole egg; egg white alone is about 3.5 g', noun: 'egg', nounPlural: 'eggs', portions: [
+    { size: 'Whole', amount: 'about 50 g', grams: 6 },
+    { size: 'White only', amount: 'about 33 g', grams: 3.5 },
   ] },
-  { food: 'Dal', hint: 'Cooked dal, medium thickness', portions: [
-    { size: 'Half katori', amount: 'about 75 ml', grams: 4 },
-    { size: '1 katori', amount: 'about 150 ml', grams: 8 },
-    { size: '2 katori', amount: 'about 300 ml', grams: 16 },
+  { food: 'Dal', hint: 'Cooked dal, medium thickness', noun: 'katori', nounPlural: 'katori', portions: [
+    { size: 'Small', amount: 'about 100 ml', grams: 5 },
+    { size: 'Regular', amount: 'about 150 ml', grams: 8 },
+    { size: 'Large', amount: 'about 200 ml', grams: 10 },
   ] },
-  { food: 'Curd', hint: 'Plain dahi', portions: [
-    { size: 'Small bowl', amount: 'about 100 g', grams: 4 },
-    { size: 'Medium bowl', amount: 'about 200 g', grams: 7 },
-    { size: 'Large bowl', amount: 'about 300 g', grams: 10 },
+  { food: 'Curd', hint: 'Plain dahi', noun: 'bowl', nounPlural: 'bowls', portions: [
+    { size: 'Small', amount: 'about 100 g', grams: 4 },
+    { size: 'Medium', amount: 'about 200 g', grams: 7 },
+    { size: 'Large', amount: 'about 300 g', grams: 10 },
   ] },
-  { food: 'Milk', hint: 'Cow or toned milk', portions: [
-    { size: 'Small glass', amount: 'about 150 ml', grams: 5 },
-    { size: 'Large glass', amount: 'about 250 ml', grams: 8 },
+  { food: 'Milk', hint: 'Cow or toned milk', noun: 'glass', nounPlural: 'glasses', portions: [
+    { size: 'Small', amount: 'about 150 ml', grams: 5 },
+    { size: 'Large', amount: 'about 250 ml', grams: 8 },
   ] },
-  { food: 'Greek yoghurt', hint: 'Hung curd or Greek yoghurt', portions: [
-    { size: 'Small cup', amount: 'about 100 g', grams: 9 },
-    { size: 'Large cup', amount: 'about 200 g', grams: 18 },
+  { food: 'Greek yoghurt', hint: 'Hung curd or Greek yoghurt', noun: 'cup', nounPlural: 'cups', portions: [
+    { size: 'Small', amount: 'about 100 g', grams: 9 },
+    { size: 'Large', amount: 'about 200 g', grams: 18 },
   ] },
-  { food: 'Soy chunks', hint: 'Weighed dry, before soaking', portions: [
+  { food: 'Soy chunks', hint: 'Weighed dry, before soaking', noun: 'serving', nounPlural: 'servings', portions: [
     { size: 'Small', amount: 'about 25 g dry', grams: 13 },
     { size: 'Large', amount: 'about 50 g dry', grams: 25 },
   ] },
-  { food: 'Sattu', hint: 'Roasted gram flour drink', portions: [
-    { size: '2 tbsp', amount: 'about 20 g', grams: 4 },
-    { size: '4 tbsp', amount: 'about 40 g', grams: 9 },
+  { food: 'Sattu', hint: 'Roasted gram flour', noun: 'tablespoon', nounPlural: 'tablespoons', portions: [
+    { size: 'Heaped', amount: 'about 10 g', grams: 2 },
   ] },
-  { food: 'Whey', hint: 'Protein powder', portions: [
-    { size: 'Half scoop', amount: 'about 15 g powder', grams: 12 },
-    { size: '1 scoop', amount: 'about 30 g powder', grams: 24 },
+  { food: 'Whey', hint: 'Protein powder', noun: 'scoop', nounPlural: 'scoops', portions: [
+    { size: 'Half', amount: 'about 15 g powder', grams: 12 },
+    { size: 'Full', amount: 'about 30 g powder', grams: 24 },
   ] },
 ];
 
-/** Name stored in the log, e.g. "Fish, Medium (size of your palm, about 100 g)". */
-export const portionLabel = (f: ProteinFood, p: Portion) => `${f.food}, ${p.size.toLowerCase()} (${p.amount})`;
+/** Total protein for n items, rounded to the gram (minimum 1). */
+export const portionTotal = (p: Portion, count: number) => Math.max(1, Math.round(p.grams * count));
+
+/** Log name, e.g. "Chicken: 3 medium pieces". */
+export const countedName = (food: string, size: string, noun: string, nounPlural: string, count: number) =>
+  `${food}: ${count} ${size.toLowerCase()} ${count === 1 ? noun : nounPlural}`;
 
 export const PAIN_SIDES = ['Left', 'Right', 'Both sides', 'Middle'] as const;
 export const PAIN_AREAS = [

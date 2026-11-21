@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, Bot, CheckCircle2, CloudSun, Dumbbell, Flame, HeartPulse, HelpCircle, Info, Moon, Plus, Trash2, TrendingUp, Undo2, Utensils, X,
+  Activity, AlertTriangle, Bot, CheckCircle2, CloudSun, Dumbbell, Flame, HeartPulse, HelpCircle, Info, Minus, Moon, Plus, Trash2, TrendingUp, Undo2, Utensils, X,
 } from 'lucide-react';
 import { Audit, exerciseWarnings, mealSlotsFor } from '../domain/engine';
 import { formatDateISO, getDayKeyFromDate, shortDateLabel } from '../domain/dates';
-import { PAIN_AREAS, PAIN_SCALE, PAIN_SIDES, PROTEIN_FOODS, portionLabel } from '../domain/reference';
+import { PAIN_AREAS, PAIN_SCALE, PAIN_SIDES, PROTEIN_FOODS, countedName, portionTotal } from '../domain/reference';
 import { KG_PER_LB, displayLoad, fromUnit } from '../domain/units';
 import { inferRiskTags, isOneSided } from '../domain/program';
 import { isDuplicateWorkout, uid } from '../domain/state';
@@ -161,12 +161,12 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
   const pct = target > 0 ? Math.min(100, Math.round((total / target) * 100)) : 0;
   const perMeal = audit.protein.perMealMinG ?? Math.round(target / slots.length);
 
-  const addFood = (name: string, grams: number | null) => {
+  const addFood = (name: string, grams: number | null, extra: Partial<ProteinItem> = {}) => {
     if (!name.trim() || !grams || grams <= 0 || grams > 300) {
       showToast('Enter a food name and grams of protein (1–300).', 'amber');
       return;
     }
-    const item = { id: uid(), mealSlot: slot, name: name.trim().slice(0, 120), grams };
+    const item: ProteinItem = { id: uid(), mealSlot: slot, name: name.trim().slice(0, 120), grams, ...extra };
     updateProfile((p) => ({ proteinLogs: { ...p.proteinLogs, [today]: [...(p.proteinLogs[today] ?? []), item] } }));
     setLastRemoved(null);
     showToast(`Added ${grams} g protein to ${slot}`);
@@ -187,6 +187,35 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
     setLastRemoved(null);
   };
   const picked = PROTEIN_FOODS.find((f) => f.food === pickFood) ?? null;
+  const [sizeIdx, setSizeIdx] = useState(0);
+  const [count, setCount] = useState(1);
+  const choose = (food: string | null) => {
+    setPickFood(food);
+    const f = PROTEIN_FOODS.find((x) => x.food === food);
+    const mid = f ? f.portions.findIndex((p) => /medium|regular|whole|full/i.test(p.size)) : 0;
+    setSizeIdx(Math.max(0, mid));
+    setCount(1);
+  };
+  const addPieces = () => {
+    if (!picked) return;
+    const po = picked.portions[Math.min(sizeIdx, picked.portions.length - 1)];
+    addFood(countedName(picked.food, po.size, picked.noun, picked.nounPlural, count), portionTotal(po, count), {
+      count, gramsEach: po.grams, food: picked.food, size: po.size, noun: picked.noun, nounPlural: picked.nounPlural,
+    });
+    choose(null);
+  };
+  /** − / + on a logged item; reaching 0 removes it (with Undo). */
+  const changeCount = (it: ProteinItem, delta: number) => {
+    if (!it.count || !it.gramsEach || !it.food) return;
+    const n = it.count + delta;
+    if (n < 1) return removeFood(it.id);
+    if (n > 50) return;
+    const next: ProteinItem = {
+      ...it, count: n, grams: portionTotal({ size: '', amount: '', grams: it.gramsEach }, n),
+      name: countedName(it.food, it.size ?? '', it.noun ?? 'piece', it.nounPlural ?? 'pieces', n),
+    };
+    updateProfile((p) => ({ proteinLogs: { ...p.proteinLogs, [today]: (p.proteinLogs[today] ?? []).map((x) => (x.id === it.id ? next : x)) } }));
+  };
 
   // ---- Logger ----
   const [newEx, setNewEx] = useState('');
@@ -314,30 +343,53 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
             );
           })}
         </div>
-        <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-600">Tap a food, then pick the size, to add to {slot}</p>
+        <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-600">Tap a food, pick the piece size and how many, to add to {slot}</p>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Foods">
           {PROTEIN_FOODS.map((f) => (
-            <button key={f.food} type="button" aria-expanded={pickFood === f.food} onClick={() => setPickFood(pickFood === f.food ? null : f.food)}
+            <button key={f.food} type="button" aria-expanded={pickFood === f.food} onClick={() => choose(pickFood === f.food ? null : f.food)}
               className={`inline-flex items-center gap-1.5 px-3.5 min-h-[44px] rounded-full text-sm font-semibold border ${pickFood === f.food ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-slate-100 hover:bg-emerald-100 text-slate-800 border-slate-200'}`}>
               {f.food}
             </button>
           ))}
         </div>
-        {picked && (
-          <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50/60 p-3" role="group" aria-label={`${picked.food} size`}>
-            <p className="text-sm font-bold text-emerald-950">{picked.food}: how much? <span className="font-normal text-slate-700">{picked.hint}</span></p>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {picked.portions.map((po) => (
-                <button key={po.size} type="button" aria-label={`Add ${picked.food} ${po.size.toLowerCase()}, ${po.grams} g protein`}
-                  onClick={() => { addFood(portionLabel(picked, po), po.grams); setPickFood(null); }}
-                  className="flex items-center justify-between gap-2 text-left px-3 py-2 min-h-[52px] rounded-xl bg-white border border-emerald-300 hover:bg-emerald-100">
-                  <span><span className="block text-sm font-bold text-slate-900">{po.size}</span><span className="block text-xs text-slate-600">{po.amount}</span></span>
-                  <span className="shrink-0 text-sm font-extrabold text-emerald-800">+{po.grams} g</span>
-                </button>
-              ))}
+        {picked && (() => {
+          const po = picked.portions[Math.min(sizeIdx, picked.portions.length - 1)];
+          const totalG = portionTotal(po, count);
+          return (
+            <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50/60 p-3">
+              <p className="text-sm font-bold text-emerald-950">{picked.food} <span className="font-normal text-slate-700">{picked.hint}</span></p>
+              {picked.portions.length > 1 && (
+                <>
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-slate-600">Size of one {picked.noun}</p>
+                  <div className="mt-1 grid grid-cols-1 sm:grid-cols-3 gap-2" role="group" aria-label={`${picked.food} ${picked.noun} size`}>
+                    {picked.portions.map((p, k) => (
+                      <button key={p.size} type="button" aria-pressed={k === sizeIdx} onClick={() => setSizeIdx(k)}
+                        aria-label={`${p.size} ${picked.noun}, ${p.amount}, ${p.grams} g protein each`}
+                        className={`flex items-center justify-between gap-2 text-left px-3 py-2 min-h-[52px] rounded-xl border ${k === sizeIdx ? 'bg-emerald-700 border-emerald-700 text-white' : 'bg-white border-emerald-300 text-slate-900 hover:bg-emerald-100'}`}>
+                        <span><span className="block text-sm font-bold">{p.size}</span><span className={`block text-xs ${k === sizeIdx ? 'text-emerald-50' : 'text-slate-600'}`}>{p.amount}</span></span>
+                        <span className="shrink-0 text-sm font-extrabold">{p.grams} g</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <span className="text-sm font-semibold text-slate-800">How many?</span>
+                <div className="flex items-center gap-1">
+                  <button type="button" aria-label={`Fewer ${picked.nounPlural}`} onClick={() => setCount((c) => Math.max(1, c - 1))}
+                    className="w-11 h-11 grid place-items-center rounded-lg bg-white border border-slate-300 text-slate-900"><Minus className="w-4 h-4" aria-hidden /></button>
+                  <span className="w-10 text-center text-lg font-extrabold tabular-nums" aria-live="polite" aria-label={`${count} ${count === 1 ? picked.noun : picked.nounPlural}`}>{count}</span>
+                  <button type="button" aria-label={`More ${picked.nounPlural}`} onClick={() => setCount((c) => Math.min(20, c + 1))}
+                    className="w-11 h-11 grid place-items-center rounded-lg bg-white border border-slate-300 text-slate-900"><Plus className="w-4 h-4" aria-hidden /></button>
+                </div>
+              </div>
+              <button type="button" onClick={addPieces}
+                className="mt-3 w-full flex items-center justify-center gap-2 min-h-[48px] rounded-xl text-sm font-bold bg-emerald-700 text-white hover:bg-emerald-800">
+                <Plus className="w-4 h-4" aria-hidden /> Add {count} {po.size.toLowerCase()} {count === 1 ? picked.noun : picked.nounPlural}: {totalG} g protein
+              </button>
             </div>
-          </div>
-        )}
+          );
+        })()}
         <div className="mt-3 flex flex-wrap sm:flex-nowrap gap-2">
           <input type="text" aria-label="Food name" placeholder="Other food (e.g. moong chilla)" value={foodName} onChange={(e) => setFoodName(e.target.value)}
             className="flex-1 min-w-[160px] min-h-[44px] text-sm px-3 rounded-xl border border-slate-300 bg-white" />
@@ -355,15 +407,25 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
         )}
         {items.length > 0 && (
           <div className="mt-4 pt-3 border-t border-slate-100">
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Logged today (tap Remove to take one off)</p>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Logged today (− / + to change how many)</p>
             <ul className="divide-y divide-slate-100">
               {items.map((i) => (
-                <li key={i.id} className="flex items-center justify-between gap-2 py-1.5 text-sm text-slate-900">
+                <li key={i.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 py-1.5 text-sm text-slate-900">
                   <span className="min-w-0"><span className="text-xs font-bold uppercase text-emerald-800">{i.mealSlot}</span> {i.name} <strong className="tabular-nums">{i.grams} g</strong></span>
+                  <span className="shrink-0 ml-auto flex items-center gap-1">
+                  {i.count && i.gramsEach && i.food ? (
+                    <>
+                      <button type="button" onClick={() => changeCount(i, -1)} aria-label={`One less: ${i.name}`}
+                        className="w-10 h-10 grid place-items-center rounded-lg border border-slate-300 bg-white text-slate-900"><Minus className="w-4 h-4" aria-hidden /></button>
+                      <button type="button" onClick={() => changeCount(i, 1)} aria-label={`One more: ${i.name}`}
+                        className="w-10 h-10 grid place-items-center rounded-lg border border-slate-300 bg-white text-slate-900"><Plus className="w-4 h-4" aria-hidden /></button>
+                    </>
+                  ) : null}
                   <button type="button" onClick={() => removeFood(i.id)} aria-label={`Remove ${i.name}`}
                     className="shrink-0 inline-flex items-center gap-1 px-2.5 min-h-[40px] rounded-lg text-sm font-semibold text-rose-800 border border-rose-200 bg-rose-50 hover:bg-rose-100">
                     <X className="w-4 h-4" aria-hidden /> Remove
                   </button>
+                  </span>
                 </li>
               ))}
             </ul>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runAudit } from './engine';
 import { createBlankProfile, parseState } from './state';
 import { BAND_PUSH_DOWN_NAME, PROGRAM_VERSION, PUSH_DOWN_NAME, PUSH_UP_NAME, buildDefaultProgram, isOneSided } from './program';
-import { PAIN_AREAS, PAIN_SCALE, PROTEIN_FOODS, portionLabel } from './reference';
+import { PAIN_AREAS, PAIN_SCALE, PROTEIN_FOODS, countedName, portionTotal } from './reference';
 import { KG_PER_LB, defaultIncrementKg, displayLoad, formatLoad, fromUnit } from './units';
 import { workoutsCsv } from './csv';
 import { daysAgoISO } from './dates';
@@ -79,16 +79,19 @@ describe('AC-12 plan upgrade keeps the user\'s edits', () => {
 });
 
 describe('AC-13 protein portions and pain records', () => {
-  it('AC-13.1 every food has 2–3 sizes that rise with size, within sane per-portion grams', () => {
+  it('AC-13.1 every food has 1–3 sizes of ONE piece or serving, rising with size, realistic per item', () => {
     for (const f of PROTEIN_FOODS) {
-      expect(f.portions.length).toBeGreaterThanOrEqual(2);
+      expect(f.portions.length).toBeGreaterThanOrEqual(1);
       expect(f.portions.length).toBeLessThanOrEqual(3);
       const g = f.portions.map((p) => p.grams);
-      expect([...g].sort((a, b) => a - b)).toEqual(g);
-      g.forEach((x) => { expect(x).toBeGreaterThan(0); expect(x).toBeLessThanOrEqual(40); });
+      if (!/egg/i.test(f.food)) expect([...g].sort((a, b) => a - b)).toEqual(g);
+      g.forEach((x) => { expect(x).toBeGreaterThan(0); expect(x).toBeLessThanOrEqual(25); });
     }
+    // A single fish or chicken piece is well under a 100 g "portion".
     const fish = PROTEIN_FOODS.find((f) => f.food === 'Fish')!;
-    expect(portionLabel(fish, fish.portions[1])).toMatch(/^Fish, medium/);
+    const chicken = PROTEIN_FOODS.find((f) => f.food === 'Chicken')!;
+    expect(fish.portions.map((p) => p.size)).toEqual(['Small', 'Medium', 'Large']);
+    expect(chicken.portions[1].grams).toBeLessThan(15);
   });
   it('AC-13.2 the pain scale covers 0 to 10 and says effort is not pain', () => {
     expect(PAIN_SCALE.map((r) => r.range)).toEqual(['0', '1–3', '4–5', '6–10']);
@@ -155,5 +158,30 @@ describe('AC-14 second round: left/right sets, home push-downs', () => {
     const csv = workoutsCsv(r.state.profiles[0]);
     expect(csv).toContain(',1,Left,');
     expect(csv).toContain(',2,Right,');
+  });
+});
+
+describe('AC-15 protein by piece size and count', () => {
+  it('AC-15.1 total = count × protein per piece, rounded; names read naturally', () => {
+    const chicken = PROTEIN_FOODS.find((f) => f.food === 'Chicken')!;
+    const med = chicken.portions[1];
+    expect(portionTotal(med, 3)).toBe(33);
+    expect(countedName('Chicken', 'Medium', 'piece', 'pieces', 3)).toBe('Chicken: 3 medium pieces');
+    expect(countedName('Chicken', 'Medium', 'piece', 'pieces', 1)).toBe('Chicken: 1 medium piece');
+    const prawn = PROTEIN_FOODS.find((f) => f.food === 'Prawns')!.portions[1];
+    expect(portionTotal(prawn, 3)).toBe(8); // 7.5 rounds up
+  });
+  it('AC-15.2 counted items survive a reload; bad counts fall back to a plain item', () => {
+    const items = [
+      { id: 'a', mealSlot: 'Lunch', name: 'Chicken: 3 medium pieces', grams: 33, count: 3, gramsEach: 11, food: 'Chicken', size: 'Medium', noun: 'piece', nounPlural: 'pieces' },
+      { id: 'b', mealSlot: 'Lunch', name: 'Odd', grams: 5, count: 'x', gramsEach: 5, food: 'Fish' },
+    ];
+    const r = parseState({ version: 2, profiles: [{ name: 'T', proteinLogs: { [TODAY]: items } }] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const [a, b] = r.state.profiles[0].proteinLogs[TODAY];
+    expect(a).toMatchObject({ count: 3, gramsEach: 11, food: 'Chicken', size: 'Medium' });
+    expect(b.count).toBeUndefined();
+    expect(b.grams).toBe(5);
   });
 });

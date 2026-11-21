@@ -165,7 +165,13 @@ function parseProteinLogs(v: unknown): Record<string, ProteinItem[]> {
     if (!isValidISODate(date)) continue;
     const parsed = arr(items)
       .filter(isObj)
-      .map((it) => ({ id: str(it.id) || uid(), mealSlot: str(it.mealSlot, 'Lunch', 30), name: str(it.name, 'Item', 120), grams: num(it.grams, 0, 0, 300) }))
+      .map((it): ProteinItem => {
+        const base = { id: str(it.id) || uid(), mealSlot: str(it.mealSlot, 'Lunch', 30), name: str(it.name, 'Item', 120), grams: num(it.grams, 0, 0, 300) };
+        const count = numOrNull(it.count, 1, 50);
+        const gramsEach = numOrNull(it.gramsEach, 0.5, 100);
+        if (count === null || gramsEach === null || typeof it.food !== 'string') return base;
+        return { ...base, count: Math.round(count), gramsEach, food: str(it.food, '', 40), size: str(it.size, '', 30), noun: str(it.noun, 'piece', 30), nounPlural: str(it.nounPlural, 'pieces', 30) };
+      })
       .filter((it) => it.grams > 0);
     if (parsed.length) out[date] = parsed;
   }

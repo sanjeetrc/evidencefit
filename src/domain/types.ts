@@ -91,6 +91,14 @@ export interface ProteinItem {
   mealSlot: string;
   name: string;
   grams: number;
+  /** For items logged by piece: how many, and protein per piece. */
+  count?: number;
+  gramsEach?: number;
+  /** Builds the name from the count, e.g. "Chicken: {n} medium pieces" uses food/size/noun. */
+  food?: string;
+  size?: string;
+  noun?: string;
+  nounPlural?: string;
 }
 
 export interface Benchmark {

@@ -35,13 +35,20 @@ try {
 
   // J2: protein logging, 60+ per-meal target
   await page.getByRole('button', { name: 'Fish', exact: true }).click();
-  check('J2 fish offers small / medium / large', (await page.getByRole('group', { name: 'Fish size' }).getByRole('button').count()) === 3);
-  await page.getByRole('button', { name: 'Add Fish medium, 25 g protein' }).click();
+  check('J2 fish offers small / medium / large piece', (await page.getByRole('group', { name: 'Fish piece size' }).getByRole('button').count()) === 3);
+  await page.getByRole('button', { name: 'More pieces' }).click();
+  await page.getByRole('button', { name: 'Add 2 medium pieces: 28 g protein' }).click();
   await page.getByRole('button', { name: 'Paneer', exact: true }).click();
-  await page.getByRole('button', { name: 'Add Paneer medium, 18 g protein' }).click();
-  check('J2 portions add to today', (await page.locator('text=43 g').first().count()) > 0);
+  await page.getByRole('group', { name: 'Paneer piece size' }).getByRole('button', { name: /^Large piece/ }).click();
+  await page.getByRole('button', { name: 'More pieces' }).click();
+  await page.getByRole('button', { name: 'More pieces' }).click();
+  await page.getByRole('button', { name: 'Add 3 large pieces: 15 g protein' }).click();
+  check('J2 pieces add to today (2 medium fish + 3 large paneer = 43 g)', (await page.locator('text=43 g').first().count()) > 0);
+  await page.getByRole('button', { name: 'One less: Paneer: 3 large pieces' }).click();
+  check('J2 minus takes one piece off', await page.getByText('Paneer: 2 large pieces').isVisible() && (await page.locator('text=38 g').first().count()) > 0);
+  await page.getByRole('button', { name: 'One more: Paneer: 2 large pieces' }).click();
   await page.getByRole('button', { name: /^Remove Paneer/ }).click();
-  check('J2 remove takes it off', (await page.locator('text=25 g').first().count()) > 0 && (await page.getByRole('button', { name: /^Remove Paneer/ }).count()) === 0);
+  check('J2 remove takes it off', (await page.getByRole('button', { name: /^Remove Paneer/ }).count()) === 0 && (await page.locator('text=28 g').first().count()) > 0);
   await page.getByRole('button', { name: 'Undo' }).click();
   check('J2 undo puts it back', (await page.locator('text=43 g').first().count()) > 0);
   check('J2 60+ per-meal target shown (0.4 g/kg = 30 g)', await page.getByText(/at least 30 g at each meal/).isVisible());

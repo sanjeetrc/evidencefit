@@ -86,6 +86,10 @@ Evidence: 52 unit tests (new AC-11 units, AC-12 plan upgrade, AC-13 portions and
 
 Evidence: 56 unit tests (AC-14 added), 30/30 phone end-to-end checks.
 
+## Release 1.3 (2026-11-21): protein by piece size
+
+Owner clarified that small / medium / large means the size of ONE piece. Each food now asks: size of one piece (or katori, bowl, glass, scoop), then how many. The total is shown before adding ("Add 3 medium pieces: 33 g protein"). Logged items have − / + to change the count, plus Remove and Undo. Per-piece values (cooked, edible weight, estimates ±25%): fish piece 40/60/90 g → 9/14/21 g protein; chicken curry piece 25/40/60 g meat → 7/11/16 g; prawn 5/10/25 g → 1/2.5/6 g; paneer piece 10/15/25 g → 2/3/5 g; egg 6 g (white 3.5 g). Evidence: 58 unit tests (AC-15), 31/31 phone checks.
+
 ## Backup and restore (runbook)
 - Settings → *Download backup* (all people). The app nags after 14 days. Keep copies in Google Drive.
 - Restore: Settings → *Restore from backup* → confirm. Accepts prototype (v1) backups.
