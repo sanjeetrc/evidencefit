@@ -9,8 +9,8 @@ import re, sys, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / 'src'
 ORDER = ['domain/types.ts', 'domain/units.ts', 'domain/dates.ts', 'domain/program.ts', 'domain/reference.ts',
-         'domain/state.ts', 'domain/cardio.ts', 'domain/circuitParser.ts', 'domain/engine.ts', 'domain/csv.ts', 'ai/coach.ts', 'drive/googleDrive.ts', 'ui/common.tsx', 'ui/Timer.tsx',
-         'ui/CardioCard.tsx', 'ui/CircuitCard.tsx', 'ui/SafetyCheckCard.tsx', 'ui/TodayTab.tsx', 'ui/ProgramTab.tsx', 'ui/TrendsTab.tsx', 'ui/CoachTab.tsx', 'ui/SettingsTab.tsx', 'App.tsx']
+         'domain/state.ts', 'domain/cardio.ts', 'domain/circuitParser.ts', 'domain/focus.ts', 'domain/engine.ts', 'domain/csv.ts', 'ai/coach.ts', 'drive/googleDrive.ts', 'ui/common.tsx', 'ui/Timer.tsx',
+         'ui/CardioCard.tsx', 'ui/CircuitCard.tsx', 'ui/TodayTab.tsx', 'ui/ProgramTab.tsx', 'ui/TrendsTab.tsx', 'ui/CoachTab.tsx', 'ui/SettingsTab.tsx', 'App.tsx']
 EXTERNAL = ('react', 'lucide-react', 'recharts')
 
 def must(src, old, new, where):

@@ -111,25 +111,14 @@ try {
   check('J9 walk shown in Progress', (await page.getByText(/Evening walk, road: 30 min · 2\.4 km · 4\.8 km\/h/).count()) > 0);
   check('J9 counts toward aerobic minutes', (await page.getByText(/^30 \/ 150\+$/).count()) > 0 || (await page.locator('text=/\b30 \/ 150\+/').count()) > 0);
 
-  // J11: "Before you train" symptom check
   const nav = (n) => page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: n }).click();
   await nav('Today');
-  check('J11 symptom check shown before training', await page.getByRole('heading', { name: 'Before you train' }).isVisible());
-  await page.getByLabel('Dizziness, light-headedness or fainting').check();
-  await page.getByRole('button', { name: 'Save: I have this' }).click();
-  check('J11 a warning sign means no exercise today', await page.getByRole('alert').getByText('Do not exercise today').isVisible());
-  await shot('08-symptom-stop');
-  await page.getByRole('alert').getByRole('button', { name: 'Change' }).click();
-  await page.getByLabel('Dizziness, light-headedness or fainting').uncheck();
-  await page.getByRole('button', { name: 'None of these: I feel fine' }).click();
-  check('J11 all clear is recorded', await page.getByText(/Before you train: checked.*no warning signs/).isVisible());
 
   // J12: log for an earlier day
   const yLabel = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(12); return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); });
   await page.getByRole('group', { name: 'Logging for' }).getByRole('button', { name: 'Yesterday' }).click();
   check('J12 earlier day is clearly marked', await page.getByText(new RegExp(`Logging for \\w+ ${yLabel}\\. Sessions, walks and protein`)).isVisible());
   check('J12 protein card follows the chosen day', await page.getByRole('heading', { name: `Protein on ${yLabel}` }).isVisible());
-  check('J12 symptom check only for today', (await page.getByRole('heading', { name: 'Before you train' }).count()) === 0);
 
   // J13: type the whole circuit, read offline, save to the chosen day
   await page.getByText('Type or say the whole circuit').click();
@@ -147,6 +136,20 @@ try {
   check('J13 saved to yesterday with 3 leg press sets', !!circ && circ.date === yISO && circ.exercises[0].sets.length === 3 && circ.exercises[0].sets[0].rpe === 8, circ ? circ.date : 'missing');
   await page.getByRole('group', { name: 'Logging for' }).getByRole('button', { name: 'Today' }).click();
   check('J12 back to today', await page.getByRole('heading', { name: 'Protein today' }).isVisible());
+
+  // J14: next suggested focus, quick add, fuller protein list (from the older app)
+  check('J14 next suggested focus with gym and home options', await page.getByRole('heading', { name: /^Next suggested focus: / }).isVisible()
+    && await page.getByText('Gym option', { exact: true }).isVisible() && await page.getByText('Home option', { exact: true }).isVisible());
+  await page.getByRole('group', { name: 'Quick add list' }).getByRole('button', { name: 'Home' }).click();
+  check('J14 picking Home sets the session place', (await page.getByLabel('Location').inputValue()) === 'Home');
+  await page.getByRole('group', { name: 'Quick add exercises' }).getByRole('button', { name: /Dumbbell row/ }).click();
+  check('J14 one tap adds the exercise with 3 sets', (await page.getByRole('article', { name: 'Dumbbell row' }).count()) === 1);
+  await page.getByRole('group', { name: 'Quick add list' }).getByRole('button', { name: 'Mobility' }).click();
+  check('J14 mobility list offered', await page.getByRole('group', { name: 'Quick add exercises' }).getByRole('button', { name: /Cat-cow/ }).isVisible());
+  await page.getByRole('button', { name: 'Goat (mutton)', exact: true }).click();
+  check('J14 goat offered by piece size', (await page.getByRole('group', { name: 'Goat (mutton) piece size' }).getByRole('button').count()) === 3);
+  check('J14 pork and beef offered', await page.getByRole('button', { name: 'Pork', exact: true }).isVisible() && await page.getByRole('button', { name: 'Beef', exact: true }).isVisible());
+  await shot('10-focus-quickadd');
 
   // J5: persistence across reload
   await page.reload();

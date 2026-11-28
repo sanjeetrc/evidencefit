@@ -13,7 +13,7 @@ export interface ProteinFood {
 /**
  * Protein for ONE piece or serving, cooked and edible weight (bone and shell
  * excluded). Typical Indian home portions; estimates, real pieces vary ±25%.
- * Protein density used: fish 23 g, chicken 27 g, prawns 24 g, paneer 18 g per 100 g.
+ * Protein density used: fish 23 g, chicken 27 g, goat, pork and beef about 26–27 g, prawns 24 g, paneer 18 g per 100 g.
  */
 export const PROTEIN_FOODS: ProteinFood[] = [
   { food: 'Fish', hint: 'One curry or fry piece (surmai, pomfret, rawas…)', noun: 'piece', nounPlural: 'pieces', portions: [
@@ -25,6 +25,21 @@ export const PROTEIN_FOODS: ProteinFood[] = [
     { size: 'Small', amount: 'wing or small piece, about 25 g meat', grams: 7 },
     { size: 'Medium', amount: 'regular curry piece, about 40 g meat', grams: 11 },
     { size: 'Large', amount: 'leg, thigh or breast piece, about 60 g meat', grams: 16 },
+  ] },
+  { food: 'Goat (mutton)', hint: 'Curry or roast piece, meat only (not bone)', noun: 'piece', nounPlural: 'pieces', portions: [
+    { size: 'Small', amount: 'about 30 g meat', grams: 8 },
+    { size: 'Medium', amount: 'about 50 g meat', grams: 13 },
+    { size: 'Large', amount: 'about 80 g meat', grams: 22 },
+  ] },
+  { food: 'Pork', hint: 'Curry, roast or chop, meat only (not bone or fat)', noun: 'piece', nounPlural: 'pieces', portions: [
+    { size: 'Small', amount: 'about 30 g meat', grams: 8 },
+    { size: 'Medium', amount: 'about 50 g meat', grams: 13 },
+    { size: 'Large', amount: 'about 80 g meat', grams: 21 },
+  ] },
+  { food: 'Beef', hint: 'Curry, fry or steak, meat only (not bone)', noun: 'piece', nounPlural: 'pieces', portions: [
+    { size: 'Small', amount: 'about 30 g meat', grams: 8 },
+    { size: 'Medium', amount: 'about 50 g meat', grams: 14 },
+    { size: 'Large', amount: 'about 80 g meat', grams: 22 },
   ] },
   { food: 'Prawns', hint: 'One prawn, shelled and cooked', noun: 'prawn', nounPlural: 'prawns', portions: [
     { size: 'Small', amount: 'about 5 g', grams: 1 },

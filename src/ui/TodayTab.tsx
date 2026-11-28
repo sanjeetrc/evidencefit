@@ -13,7 +13,7 @@ import { Card, CardHeader, NumInput } from './common';
 import { Timer } from './Timer';
 import { CardioCard } from './CardioCard';
 import { CircuitCard } from './CircuitCard';
-import { SafetyCheckCard } from './SafetyCheckCard';
+import { QUICK_ADD, QuickExercise, Region, restedLabel, suggestFocus } from '../domain/focus';
 
 /** `load` is in the exercise's own unit (kg or lb), exactly as typed; converted to kg on save. */
 export interface DraftSet { load: number | null; reps: number | null; rpe: number | null; pain: number | null; side?: Side }
@@ -277,6 +277,48 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
   };
 
   const draftTouched = draft.exercises.some((x) => x.sets.some((s) => s.reps !== null));
+  const loadTemplate = (k: DayKey | 'Custom') => {
+    const go = () => setDraft(buildDraft(profile, audit, k, today));
+    if (draftTouched) confirm({ title: 'Switch template?', message: 'Sets entered so far will be cleared.', confirmLabel: 'Switch', onConfirm: go });
+    else go();
+  };
+  const focus = useMemo(() => suggestFocus(profile, today), [profile, today]);
+
+  // ---- Quick add (as in the older app): one tap appends one exercise ----
+  const [quickTab, setQuickTab] = useState<'Gym' | 'Home' | 'Mobility' | 'Recent'>(() => (draft.location === 'Home' ? 'Home' : 'Gym'));
+  const recentQuick = useMemo(() => {
+    const seen = new Set<string>(); const out: QuickExercise[] = [];
+    [...profile.workouts].sort((a, b) => b.date.localeCompare(a.date)).forEach((w) => w.exercises.forEach((e) => {
+      const k = e.name.trim().toLowerCase();
+      if (e.cardio || seen.has(k) || out.length >= 12) return;
+      seen.add(k); out.push({ name: e.name.trim(), sets: Math.max(1, e.sets.length), reps: e.sets[0]?.reps || e.repMax || 10, unit: e.unit });
+    }));
+    return out;
+  }, [profile.workouts]);
+  const quickList = quickTab === 'Recent' ? recentQuick : QUICK_ADD[quickTab];
+  const pickQuickTab = (t: typeof quickTab) => {
+    setQuickTab(t);
+    if (t === 'Gym' || t === 'Home') patch({ location: t });
+  };
+  const addExercise = (qe: QuickExercise) => {
+    const key = qe.name.trim().toLowerCase();
+    const planned = DAYS_OF_WEEK.flatMap((d) => profile.program[d].exercises).find((e) => e.name.trim().toLowerCase() === key);
+    let lastKg: number | null = null;
+    for (const w of [...profile.workouts].sort((a, b) => b.date.localeCompare(a.date))) {
+      const done = w.exercises.find((x) => x.name.trim().toLowerCase() === key)?.sets.filter((x) => x.reps > 0) ?? [];
+      if (done.length) { lastKg = done[done.length - 1].loadKg; break; }
+    }
+    const u: LoadUnit = planned?.loadUnit ?? 'kg';
+    const load = lastKg ? displayLoad(lastKg, u) : null;
+    const oneSided = planned ? isOneSided(planned) : isOneSided({ name: qe.name });
+    const ex: DraftExercise = {
+      exerciseId: planned?.id ?? uid(), name: qe.name, repMin: qe.reps, repMax: qe.reps, unit: qe.unit, targetRpe: planned?.targetRpe ?? 7,
+      incrementKg: planned?.incrementKg, loadUnit: u, notes: planned?.notes, tags: planned?.tags ?? inferRiskTags(qe.name),
+      sets: Array.from({ length: Math.max(1, qe.sets) }, () => plannedSet(load, oneSided)).flat(),
+    };
+    patch({ exercises: [...draft.exercises, ex] });
+    showToast(`Added ${qe.name}: ${qe.sets} × ${qe.reps}${qe.unit === 'reps' ? '' : ` ${qe.unit}`}`);
+  };
   const pickDate = (d: string) => {
     if (!isValidISODate(d) || d > realToday || d === today) return;
     if (draftTouched) {
@@ -309,8 +351,6 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
           </p>
         )}
       </div>
-
-      {isToday && <SafetyCheckCard key={`${profile.id}-${realToday}`} profile={profile} today={realToday} updateProfile={updateProfile} />}
 
       {backupDue && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-sky-50 border border-sky-200 px-4 py-3 text-sm text-sky-950">
@@ -478,6 +518,21 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
 
       <CircuitCard profile={profile} date={today} defaultLocation={profile.program[todayKey].location} updateProfile={updateProfile} showToast={showToast} />
 
+      <Card>
+        <CardHeader icon={<TrendingUp className="w-5 h-5" />} title={`Next suggested focus: ${focus.headline}`} subtitle={focus.why} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {([['Gym option', focus.gym], ['Home option', focus.home]] as const).map(([label, text]) => (
+            <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">{label}</p>
+              <p className="mt-1 text-sm text-slate-900">{text}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-slate-600">
+          {(['Legs', 'Push', 'Pull'] as Region[]).map((r) => `${r === 'Push' ? 'Upper push' : r === 'Pull' ? 'Upper pull' : r}: ${restedLabel(focus.since[r])}`).join(' · ')}. Use Quick add below to log these.
+        </p>
+      </Card>
+
       <Timer />
 
       <Card>
@@ -487,13 +542,7 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
           subtitle="Fill in what you did. Sets left blank are not saved. Tap Pain ? for how to score pain."
           right={
             <select aria-label="Session template" value={draft.templateKey}
-              onChange={(e) => {
-                const k = e.target.value as DayKey | 'Custom';
-                const go = () => setDraft(buildDraft(profile, audit, k, today));
-                const touched = draft.exercises.some((x) => x.sets.some((s) => s.reps !== null));
-                if (touched) confirm({ title: 'Switch template?', message: 'Sets entered so far will be cleared.', confirmLabel: 'Switch', onConfirm: go });
-                else go();
-              }}
+              onChange={(e) => loadTemplate(e.target.value as DayKey | 'Custom')}
               className="text-sm font-semibold bg-slate-50 border border-slate-300 rounded-xl px-3 min-h-[44px] max-w-full">
               {DAYS_OF_WEEK.map((d) => <option key={d} value={d}>{d}{d === todayKey ? ' (today)' : ''}: {profile.program[d].title.slice(0, 32)}</option>)}
               <option value="Custom">Custom session</option>
@@ -658,6 +707,29 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
             })}
           </div>
         )}
+
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Quick add</p>
+            <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg" role="group" aria-label="Quick add list">
+              {(['Gym', 'Home', 'Mobility', 'Recent'] as const).map((t) => (
+                <button key={t} type="button" aria-pressed={quickTab === t} onClick={() => pickQuickTab(t)}
+                  className={`px-3 min-h-[36px] rounded-md text-sm font-semibold ${quickTab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-700'}`}>{t}</button>
+              ))}
+            </div>
+          </div>
+          {quickList.length === 0 ? <p className="text-sm text-slate-600">Nothing logged yet.</p> : (
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Quick add exercises">
+              {quickList.map((qe) => (
+                <button key={qe.name} type="button" onClick={() => addExercise(qe)}
+                  className={`inline-flex items-center gap-1 px-3 min-h-[40px] rounded-full text-sm font-medium border ${quickTab === 'Mobility' ? 'bg-teal-50 border-teal-300 text-teal-950' : 'bg-slate-100 border-slate-300 text-slate-800'} hover:bg-emerald-50`}>
+                  <Plus className="w-4 h-4 text-emerald-700" aria-hidden />{qe.name.length > 34 ? `${qe.name.slice(0, 32)}…` : qe.name}
+                  <span className="text-xs text-slate-600">{qe.sets}×{qe.reps}{qe.unit === 'reps' ? '' : qe.unit === 'sec' ? 's' : ' min'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="mt-4 flex gap-2">
           <input type="text" aria-label="New exercise name" placeholder="Add an exercise…" value={newEx} onChange={(e) => setNewEx(e.target.value)}
