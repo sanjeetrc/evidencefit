@@ -208,6 +208,7 @@ export function runAudit(profile: Profile, today: string = formatDateISO()): Aud
   const history = new Map<string, SessionSummary[]>();
   for (const w of sortedWorkouts) {
     for (const e of w.exercises) {
+      if (e.cardio) continue; // walks are counted as aerobic minutes, not progressed like sets
       const s = summariseExercise(e, w.date);
       if (!s) continue;
       const key = e.name.trim().toLowerCase();

@@ -90,6 +90,10 @@ Evidence: 56 unit tests (AC-14 added), 30/30 phone end-to-end checks.
 
 Owner clarified that small / medium / large means the size of ONE piece. Each food now asks: size of one piece (or katori, bowl, glass, scoop), then how many. The total is shown before adding ("Add 3 medium pieces: 33 g protein"). Logged items have − / + to change the count, plus Remove and Undo. Per-piece values (cooked, edible weight, estimates ±25%): fish piece 40/60/90 g → 9/14/21 g protein; chicken curry piece 25/40/60 g meat → 7/11/16 g; prawn 5/10/25 g → 1/2.5/6 g; paneer piece 10/15/25 g → 2/3/5 g; egg 6 g (white 3.5 g). Evidence: 58 unit tests (AC-15), 31/31 phone checks.
 
+## Release 1.4 (2026-11-28): walks and cardio
+
+Owner reported no way to log an evening road walk at 4.8 km/h. Today now has a "Walk or cardio" card: walk / cycle / other; where (road, park or track, beach, treadmill, stationary cycle); morning / afternoon / evening (defaults from the clock); minutes plus either distance or speed (the other is worked out); effort by talk test (easy RPE 3, talk test RPE 4, brisk RPE 6; warns if above the screening cap); implausible speeds rejected. Each entry is its own session, counts toward weekly aerobic minutes, is excluded from strength progression, and appears in Session history, CSV (Activity, Surface, TimeOfDay, DistanceKm, SpeedKmh), backups and the coach summary. Progress shows a "Walks and cardio" card with a walking-speed trend. Evidence: 63 unit tests (AC-16), 35/35 phone checks.
+
 ## Backup and restore (runbook)
 - Settings → *Download backup* (all people). The app nags after 14 days. Keep copies in Google Drive.
 - Restore: Settings → *Restore from backup* → confirm. Accepts prototype (v1) backups.

@@ -11,6 +11,7 @@ import { isDuplicateWorkout, uid } from '../domain/state';
 import { Climate, DAYS_OF_WEEK, DayKey, LoadUnit, Side, Location, LoggedExercise, Profile, ProteinItem, RiskTag, Unit, Workout } from '../domain/types';
 import { Card, CardHeader, NumInput } from './common';
 import { Timer } from './Timer';
+import { CardioCard } from './CardioCard';
 
 /** `load` is in the exercise's own unit (kg or lb), exactly as typed; converted to kg on save. */
 export interface DraftSet { load: number | null; reps: number | null; rpe: number | null; pain: number | null; side?: Side }
@@ -432,6 +433,8 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
           </div>
         )}
       </Card>
+
+      <CardioCard profile={profile} today={today} rpeCap={audit.screening.rpeCap} updateProfile={updateProfile} showToast={showToast} confirm={confirm} />
 
       <Timer />
 

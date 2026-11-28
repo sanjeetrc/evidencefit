@@ -45,7 +45,7 @@ export function buildSystemPrompt(profile: Profile, audit: Audit): string {
     date: w.date,
     climate: w.climate,
     sleep: w.sleepHours,
-    exercises: w.exercises.map((e) => ({ name: e.name, sets: e.sets.map((s) => `${s.side ? `${s.side} ` : ''}${formatLoad(s.loadKg, e.loadUnit ?? 'kg').replace(' ', '')} x ${s.reps}${e.unit} RPE${s.rpe ?? '-'} pain${s.pain}`), ...(e.painSite ? { painSite: e.painSite } : {}) })),
+    exercises: w.exercises.map((e) => ({ name: e.name, sets: e.sets.map((s) => `${s.side ? `${s.side} ` : ''}${formatLoad(s.loadKg, e.loadUnit ?? 'kg').replace(' ', '')} x ${s.reps}${e.unit} RPE${s.rpe ?? '-'} pain${s.pain}`), ...(e.painSite ? { painSite: e.painSite } : {}), ...(e.cardio ? { cardio: e.cardio } : {}) })),
   }));
   return `You are a cautious, evidence-based strength and conditioning coach.
 Rules:

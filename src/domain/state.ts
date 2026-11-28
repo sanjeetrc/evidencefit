@@ -1,7 +1,7 @@
 import { PROGRAM_VERSION, buildDefaultProgram, upgradeProgram } from './program';
 import { daysAgoISO, formatDateISO, isValidISODate } from './dates';
 import {
-  AppState, Benchmark, CONDITION_KEYS, ChatMessage, DAYS_OF_WEEK, DayKey, DayPlan, LoadUnit, LoggedExercise, LoggedSet,
+  AppState, Benchmark, CARDIO_ACTIVITIES, CONDITION_KEYS, CardioActivity, CardioDetail, TIMES_OF_DAY, TimeOfDay, ChatMessage, DAYS_OF_WEEK, DayKey, DayPlan, LoadUnit, LoggedExercise, LoggedSet,
   MEDICATION_KEYS, Profile, Program, ProgramExercise, ProteinItem, RED_FLAG_KEYS, Unit, Workout,
 } from './types';
 
@@ -120,6 +120,17 @@ function parseSet(v: unknown): LoggedSet | null {
   return { loadKg: num(v.loadKg, 0, 0, 1000), reps: num(v.reps, 0, 0, 1000), rpe: clampRpe(v.rpe), pain: clampPain(v.pain), ...(v.side === 'L' || v.side === 'R' ? { side: v.side } : {}), notes: str(v.notes) };
 }
 
+function parseCardio(v: unknown): CardioDetail | undefined {
+  if (!isObj(v)) return undefined;
+  return {
+    activity: CARDIO_ACTIVITIES.includes(v.activity as CardioActivity) ? (v.activity as CardioActivity) : 'Walk',
+    surface: str(v.surface, 'Road', 40) || 'Road',
+    timeOfDay: TIMES_OF_DAY.includes(v.timeOfDay as TimeOfDay) ? (v.timeOfDay as TimeOfDay) : 'Morning',
+    distanceKm: numOrNull(v.distanceKm, 0, 300),
+    speedKmh: numOrNull(v.speedKmh, 0, 80),
+  };
+}
+
 function parseLoggedExercise(v: unknown): LoggedExercise | null {
   if (!isObj(v)) return null;
   const sets = arr(v.sets).map(parseSet).filter((s): s is LoggedSet => s !== null);
@@ -136,6 +147,7 @@ function parseLoggedExercise(v: unknown): LoggedExercise | null {
     loadUnit: loadUnit(v.loadUnit),
     tags: Array.isArray(v.tags) ? (v.tags as LoggedExercise['tags']) : undefined,
     painSite: str(v.painSite, '', 60) || undefined,
+    cardio: parseCardio(v.cardio),
     sets,
   };
 }

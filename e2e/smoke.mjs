@@ -98,6 +98,19 @@ try {
   check('J4 intervals blocked until cleared', await intervals.getByText(/Avoid: Vigorous/).isVisible());
   check('J4 RPE capped at 6', await page.getByText(/RPE 6 \(capped\)/).first().isVisible());
 
+  // J9: evening road walk at 4.8 km/h
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Today' }).click();
+  await page.getByLabel('Time of day').selectOption('Evening');
+  await page.getByLabel('Cardio minutes').fill('30');
+  await page.getByLabel('Speed km per hour').fill('4.8');
+  check('J9 distance worked out from speed', await page.getByText(/That is 2\.4 km at 4\.8 km\/h/).isVisible());
+  await page.getByRole('button', { name: 'Save walk' }).click();
+  check('J9 walk listed on Today', await page.getByText('road: 30 min · 2.4 km · 4.8 km/h').isVisible());
+  await shot('07-walk');
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();
+  check('J9 walk shown in Progress', (await page.getByText(/Evening walk, road: 30 min · 2\.4 km · 4\.8 km\/h/).count()) > 0);
+  check('J9 counts toward aerobic minutes', (await page.getByText(/^30 \/ 150\+$/).count()) > 0 || (await page.locator('text=/\b30 \/ 150\+/').count()) > 0);
+
   // J5: persistence across reload
   await page.reload();
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();

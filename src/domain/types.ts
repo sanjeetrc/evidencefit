@@ -68,9 +68,24 @@ export interface LoggedExercise {
   loadUnit?: LoadUnit;
   notes?: string;
   tags?: RiskTag[];
+  /** Walks, cycling and other cardio logged from the cardio card. */
+  cardio?: CardioDetail;
   /** Where it hurt, e.g. "Left knee", when any set had pain above 0. */
   painSite?: string;
   sets: LoggedSet[];
+}
+
+export const CARDIO_ACTIVITIES = ['Walk', 'Cycle', 'Other'] as const;
+export type CardioActivity = (typeof CARDIO_ACTIVITIES)[number];
+export const TIMES_OF_DAY = ['Morning', 'Afternoon', 'Evening'] as const;
+export type TimeOfDay = (typeof TIMES_OF_DAY)[number];
+export interface CardioDetail {
+  activity: CardioActivity;
+  /** Road, park, beach, treadmill… */
+  surface: string;
+  timeOfDay: TimeOfDay;
+  distanceKm: number | null;
+  speedKmh: number | null;
 }
 
 export interface Workout {

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, BarChart3, History, Sparkles, Trash2, TrendingUp, Zap } from 'lucide-react';
+import { AlertTriangle, BarChart3, Footprints, History, Sparkles, Trash2, TrendingUp, Zap } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Audit } from '../domain/engine';
 import { shortDateLabel } from '../domain/dates';
+import { cardioEntries, describeCardio } from '../domain/cardio';
 import { Profile } from '../domain/types';
 import { Card, CardHeader, TierBadge } from './common';
 
@@ -33,6 +34,11 @@ export function TrendsTab({ profile, audit, isDemoLoaded, onClearDemo, updatePro
       }),
     [audit.sortedWorkouts]
   );
+  const cardio = useMemo(() => cardioEntries(audit.sortedWorkouts), [audit.sortedWorkouts]);
+  const walks = cardio.filter((c) => c.detail.activity === 'Walk' && c.detail.speedKmh !== null);
+  const recentWalks = walks.slice(-5);
+  const avgWalkSpeed = recentWalks.length ? Math.round((recentWalks.reduce((s, c) => s + (c.detail.speedKmh ?? 0), 0) / recentWalks.length) * 10) / 10 : 0;
+  const speedChart = walks.slice(-12).map((c) => ({ label: shortDateLabel(c.date), speed: c.detail.speedKmh }));
   const history = [...audit.sortedWorkouts].reverse();
   const shown = showAll ? history : history.slice(0, 8);
   const aerobicPct = Math.min(100, Math.round((audit.aerobicMinutes7d / 150) * 100));
@@ -101,6 +107,36 @@ export function TrendsTab({ profile, audit, isDemoLoaded, onClearDemo, updatePro
       )}
 
       <Card>
+        <CardHeader icon={<Footprints className="w-5 h-5" />} title="Walks and cardio"
+          subtitle={walks.length ? `${cardio.length} logged; walking speed averages ${avgWalkSpeed} km/h over the last ${Math.min(5, walks.length)}` : `${cardio.length} logged`} />
+        {cardio.length === 0 ? <p className="text-sm text-slate-600">Log a walk on the Today tab, with the distance or speed, to see it here.</p> : (
+          <>
+            {speedChart.length >= 2 && (
+              <div className="h-48 mb-3" role="img" aria-label="Walking speed over time">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={speedChart} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="label" tick={axis} />
+                    <YAxis tick={axis} domain={['dataMin - 0.5', 'dataMax + 0.5']} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="speed" name="Walking speed (km/h)" stroke="#0f766e" strokeWidth={2.5} dot />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            <ul className="divide-y divide-slate-100">
+              {[...cardio].reverse().slice(0, 10).map((c) => (
+                <li key={c.workoutId} className="py-1.5 text-sm text-slate-800">
+                  <strong>{shortDateLabel(c.date)}</strong> · {c.detail.timeOfDay} {c.detail.activity.toLowerCase()}, {c.detail.surface.toLowerCase()}: {describeCardio(c)}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-slate-600">Comfortable walking speed is a well-studied marker of health in later life. A steady or rising trend is what matters, at the same effort.</p>
+          </>
+        )}
+      </Card>
+
+      <Card>
         <CardHeader icon={<BarChart3 className="w-5 h-5" />} title="Training load and sleep" subtitle="Strength sets per session, average RPE, hours slept" />
         {chart.length === 0 ? <p className="text-sm text-slate-600 text-center py-8">Log sessions to see trends.</p> : (
           <div className="h-64" role="img" aria-label="Sets, RPE and sleep for recent sessions">
@@ -129,7 +165,7 @@ export function TrendsTab({ profile, audit, isDemoLoaded, onClearDemo, updatePro
               <li key={w.id} className="py-2.5 flex items-start justify-between gap-2">
                 <div className="text-sm">
                   <p className="font-bold text-slate-900">{shortDateLabel(w.date)} · {w.title}</p>
-                  <p className="text-slate-700">{w.exercises.map((e) => `${e.name} ${e.sets.some((s) => s.side) ? `${Math.max(e.sets.filter((s) => s.side === 'L').length, e.sets.filter((s) => s.side === 'R').length)}× each side` : `${e.sets.length}×`}`).join(', ')}</p>
+                  <p className="text-slate-700">{w.exercises.map((e) => e.cardio ? `${e.name}: ${describeCardio({ workoutId: w.id, date: w.date, minutes: e.sets.reduce((a, x) => a + x.reps, 0), rpe: null, detail: e.cardio })}` : `${e.name} ${e.sets.some((s) => s.side) ? `${Math.max(e.sets.filter((s) => s.side === 'L').length, e.sets.filter((s) => s.side === 'R').length)}× each side` : `${e.sets.length}×`}`).join(', ')}</p>
                   {(w.sleepHours !== null || w.notes) && <p className="text-slate-600">{w.sleepHours !== null ? `Sleep ${w.sleepHours} h. ` : ''}{w.notes}</p>}
                 </div>
                 <button type="button" aria-label={`Delete session ${w.title} on ${w.date}`} className="p-2.5 text-slate-500 hover:text-rose-700"
