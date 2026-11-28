@@ -569,6 +569,29 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
           </select>
         </div>
 
+        <div className="mb-4 pb-4 border-b border-slate-100">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Quick add</p>
+            <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg" role="group" aria-label="Quick add list">
+              {(['Gym', 'Home', 'Mobility', 'Recent'] as const).map((t) => (
+                <button key={t} type="button" aria-pressed={quickTab === t} onClick={() => pickQuickTab(t)}
+                  className={`px-3 min-h-[36px] rounded-md text-sm font-semibold ${quickTab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-700'}`}>{t}</button>
+              ))}
+            </div>
+          </div>
+          {quickList.length === 0 ? <p className="text-sm text-slate-600">Nothing logged yet.</p> : (
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Quick add exercises">
+              {quickList.map((qe) => (
+                <button key={qe.name} type="button" onClick={() => addExercise(qe)}
+                  className={`inline-flex items-center gap-1 px-3 min-h-[40px] rounded-full text-sm font-medium border ${quickTab === 'Mobility' ? 'bg-teal-50 border-teal-300 text-teal-950' : 'bg-slate-100 border-slate-300 text-slate-800'} hover:bg-emerald-50`}>
+                  <Plus className="w-4 h-4 text-emerald-700" aria-hidden />{qe.name.length > 34 ? `${qe.name.slice(0, 32)}…` : qe.name}
+                  <span className="text-xs text-slate-600">{qe.sets}×{qe.reps}{qe.unit === 'reps' ? '' : qe.unit === 'sec' ? 's' : ' min'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {draft.exercises.length === 0 ? (
           <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300">
             <p className="text-sm font-semibold text-slate-800">Rest day, or a custom session</p>
@@ -707,29 +730,6 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
             })}
           </div>
         )}
-
-        <div className="mt-4">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Quick add</p>
-            <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg" role="group" aria-label="Quick add list">
-              {(['Gym', 'Home', 'Mobility', 'Recent'] as const).map((t) => (
-                <button key={t} type="button" aria-pressed={quickTab === t} onClick={() => pickQuickTab(t)}
-                  className={`px-3 min-h-[36px] rounded-md text-sm font-semibold ${quickTab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-700'}`}>{t}</button>
-              ))}
-            </div>
-          </div>
-          {quickList.length === 0 ? <p className="text-sm text-slate-600">Nothing logged yet.</p> : (
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Quick add exercises">
-              {quickList.map((qe) => (
-                <button key={qe.name} type="button" onClick={() => addExercise(qe)}
-                  className={`inline-flex items-center gap-1 px-3 min-h-[40px] rounded-full text-sm font-medium border ${quickTab === 'Mobility' ? 'bg-teal-50 border-teal-300 text-teal-950' : 'bg-slate-100 border-slate-300 text-slate-800'} hover:bg-emerald-50`}>
-                  <Plus className="w-4 h-4 text-emerald-700" aria-hidden />{qe.name.length > 34 ? `${qe.name.slice(0, 32)}…` : qe.name}
-                  <span className="text-xs text-slate-600">{qe.sets}×{qe.reps}{qe.unit === 'reps' ? '' : qe.unit === 'sec' ? 's' : ' min'}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
 
         <div className="mt-4 flex gap-2">
           <input type="text" aria-label="New exercise name" placeholder="Add an exercise…" value={newEx} onChange={(e) => setNewEx(e.target.value)}
