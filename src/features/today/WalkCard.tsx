@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Footprints, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '../../components/ui';
-import { buildWalkWorkout, timeOfDayNow, TIMES_OF_DAY, WALK_ACTIVITIES, WALK_PLACES, type TimeOfDay, type WalkActivity } from '../../domain/walk';
+import { buildWalkWorkout, isWalkCardSession, timeOfDayNow, TIMES_OF_DAY, TREADMILL_PLACES, WALK_ACTIVITIES, WALK_PLACES, type TimeOfDay, type WalkActivity } from '../../domain/walk';
 import { dayLabel, formatDateISO } from '../../lib/dates';
 import type { Profile, ShowToast, UpdateProfile } from '../../types';
 
@@ -17,34 +17,44 @@ export default function WalkCard({ profile, date, updateProfile, showToast }: Pr
   const [minutes, setMinutes] = useState('');
   const [speed, setSpeed] = useState('');
   const [distance, setDistance] = useState('');
+  const [incline, setIncline] = useState('');
+  const treadmill = activity === 'Treadmill';
+  const places: readonly string[] = treadmill ? TREADMILL_PLACES : WALK_PLACES;
+  const chooseActivity = (a: WalkActivity) => {
+    setActivity(a);
+    const next: readonly string[] = a === 'Treadmill' ? TREADMILL_PLACES : WALK_PLACES;
+    if (!next.includes(place)) setPlace(next[0]);
+  };
 
   const m = num(minutes); const s = num(speed); const d = num(distance);
+  const inc = incline.trim() === '' ? 0 : Number(incline.replace(',', '.'));
   const derived = m && s && !d ? `That is ${Math.round(s * (m / 60) * 10) / 10} km at ${s} km/h.`
     : m && d && !s ? `That is ${Math.round((d / (m / 60)) * 10) / 10} km/h.` : '';
 
   const save = () => {
     if (!m || m > 600) { showToast('Enter the minutes walked (1 to 600).'); return; }
     if (s !== null && s > 30) { showToast('Speed looks too high: enter km per hour, e.g. 4.8.'); return; }
-    const w = buildWalkWorkout({ date, activity, place, time, minutes: m, speedKmh: s, distanceKm: d, weightKg: profile.weightKg });
+    if (treadmill && !(Number.isFinite(inc) && inc >= 0 && inc <= 30)) { showToast('Incline should be 0 to 30 %.'); return; }
+    const w = buildWalkWorkout({ date, activity, place, time, minutes: m, speedKmh: s, distanceKm: d, weightKg: profile.weightKg, inclinePct: treadmill ? inc : null });
     updateProfile((p) => ({ circuitLogs: [...p.circuitLogs, w].sort((a, b) => a.date.localeCompare(b.date)) }));
-    setMinutes(''); setSpeed(''); setDistance('');
+    setMinutes(''); setSpeed(''); setDistance(''); setIncline('');
     showToast(`${w.entries[0].name} saved for ${dayLabel(date)} (~${w.estKcal} kcal).`);
   };
 
-  const todays = profile.circuitLogs.filter((w) => w.date === date && w.location === 'Outdoor' && w.entries.length === 1 && / (walk|cycle|cardio) \(/.test(w.entries[0].name));
+  const todays = profile.circuitLogs.filter((w) => w.date === date && isWalkCardSession(w));
 
   return (
     <Card>
       <CardHeader icon={<Footprints className="w-5 h-5" />} title="Walk or cardio"
-        subtitle="A walk or ride outside your circuit, e.g. an evening road walk. It counts toward your aerobic minutes." />
+        subtitle="A walk, treadmill or ride outside your circuit, e.g. an evening road walk. It counts toward your aerobic minutes." />
       <div className="space-y-3">
         <div className="flex flex-wrap gap-1" role="group" aria-label="Activity">
-          {WALK_ACTIVITIES.map((a) => <button key={a} type="button" aria-pressed={activity === a} onClick={() => setActivity(a)} className={pill(activity === a)}>{a}</button>)}
+          {WALK_ACTIVITIES.map((a) => <button key={a} type="button" aria-pressed={activity === a} onClick={() => chooseActivity(a)} className={pill(activity === a)}>{a}</button>)}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <label className="text-sm font-semibold text-slate-700">Where
             <select value={place} onChange={(e) => setPlace(e.target.value)} className="mt-1 w-full min-h-[44px] px-2 rounded-xl border border-slate-300 bg-white">
-              {WALK_PLACES.map((p) => <option key={p}>{p}</option>)}
+              {places.map((p) => <option key={p}>{p}</option>)}
             </select>
           </label>
           <label className="text-sm font-semibold text-slate-700">Time of day
@@ -67,15 +77,25 @@ export default function WalkCard({ profile, date, updateProfile, showToast }: Pr
               className="mt-1 w-full min-h-[44px] px-2 rounded-xl border border-slate-300" />
           </label>
         </div>
+        {treadmill && (
+          <label className="block text-sm font-semibold text-slate-700">Incline %
+            <input inputMode="decimal" aria-label="Treadmill incline percent" value={incline} onChange={(e) => setIncline(e.target.value)} placeholder="0"
+              className="mt-1 w-full min-h-[44px] px-2 rounded-xl border border-slate-300" />
+            <span className="block text-xs font-normal text-slate-600">Leave empty for flat (0%). Each 1% adds noticeably to the effort.</span>
+          </label>
+        )}
         {derived && <p className="text-sm text-emerald-800">{derived}</p>}
         <button type="button" onClick={save} className="w-full min-h-[48px] rounded-xl bg-emerald-700 text-white font-bold">
-          Save {activity === 'Other' ? 'cardio' : activity.toLowerCase()}{date === formatDateISO() ? '' : ` for ${dayLabel(date)}`}
+          Save {activity === 'Other' ? 'cardio' : treadmill ? 'treadmill walk' : activity.toLowerCase()}{date === formatDateISO() ? '' : ` for ${dayLabel(date)}`}
         </button>
         {todays.length > 0 && (
           <ul className="space-y-1.5">
             {todays.map((w) => (
               <li key={w.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                <span><span className="font-semibold">{w.entries[0].name}</span>: {w.entries[0].reps} min{w.notes ? ` · ${w.notes}` : ''}</span>
+                <span><span className="font-semibold">{w.entries[0].name}</span>: {w.entries[0].reps} min
+                  {w.entries[0].speedKmh ? ` at ${w.entries[0].speedKmh} km/h` : ''}
+                  {w.entries[0].inclinePct != null ? `, ${w.entries[0].inclinePct}% incline` : ''}
+                  {w.notes ? ` · ${w.notes}` : ''}</span>
                 <button type="button" aria-label={`Delete ${w.entries[0].name}`} className="p-2 text-slate-600"
                   onClick={() => { if (window.confirm('Delete this walk?')) updateProfile((p) => ({ circuitLogs: p.circuitLogs.filter((x) => x.id !== w.id) })); }}>
                   <Trash2 className="w-4 h-4" />

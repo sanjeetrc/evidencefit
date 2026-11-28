@@ -8,7 +8,7 @@ describe('evening walk logging', () => {
     const w = buildWalkWorkout({ date: '2026-11-28', activity: 'Walk', place: 'Road', time: 'Evening', minutes: 30, speedKmh: 4.8, distanceKm: null, weightKg: 84 });
     expect(w.location).toBe('Outdoor');
     expect(w.entries[0]).toMatchObject({ reps: 30, unit: 'min', speedKmh: 4.8, sets: 1 });
-    expect(w.notes).toBe('2.4 km at 4.8 km/h');
+    expect(w.notes).toBe('2.4 km');
     expect(w.muscles).toContain('Cardio');
     // ACSM level walking at 4.8 km/h ≈ 3.3 MET → ~140 kcal for 84 kg in 30 min
     expect(w.estKcal).toBeGreaterThan(120);

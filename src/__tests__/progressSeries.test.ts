@@ -38,3 +38,33 @@ describe('progress series', () => {
     expect(muscleBalance([w('2026-06-01', ['Back'])], today, '1y').sessions).toBe(1);
   });
 });
+
+import { buildCardioSeries } from '../domain/progressSeries';
+import { buildWalkWorkout } from '../domain/walk';
+
+describe('treadmill speed and incline', () => {
+  it('walk card saves a treadmill walk with speed and incline, at the gym', () => {
+    const w = buildWalkWorkout({ date: today, activity: 'Treadmill', place: 'Gym', time: 'Evening', minutes: 30, speedKmh: 5, distanceKm: null, weightKg: 84, inclinePct: 3 });
+    expect(w.location).toBe('Gym');
+    expect(w.entries[0].name).toBe('Evening treadmill walk (gym)');
+    expect(w.entries[0].speedKmh).toBe(5);
+    expect(w.entries[0].inclinePct).toBe(3);
+    expect(w.notes).toBe('2.5 km');
+    const flat = buildWalkWorkout({ date: today, activity: 'Treadmill', place: 'Gym', time: 'Evening', minutes: 30, speedKmh: 5, distanceKm: null, weightKg: 84, inclinePct: 0 });
+    expect(w.estKcal).toBeGreaterThan(flat.estKcal);
+    const road = buildWalkWorkout({ date: today, activity: 'Walk', place: 'Road', time: 'Evening', minutes: 30, speedKmh: 4.8, distanceKm: null, weightKg: 84 });
+    expect(road.entries[0].inclinePct).toBeNull();
+    expect(road.location).toBe('Outdoor');
+  });
+  it('cardio series averages speed and incline; last session reported', () => {
+    const t = buildWalkWorkout({ date: '2026-11-27', activity: 'Treadmill', place: 'Gym', time: 'Evening', minutes: 20, speedKmh: 5, distanceKm: null, weightKg: 84, inclinePct: 4 });
+    const r = buildWalkWorkout({ date: '2026-11-28', activity: 'Walk', place: 'Road', time: 'Evening', minutes: 30, speedKmh: 4.8, distanceKm: null, weightKg: 84 });
+    const s = buildCardioSeries([t, r], today, '4w');
+    expect(s.sessions).toBe(2);
+    expect(s.minutes).toBe(50);
+    expect(s.avgSpeed).toBe(4.9);
+    expect(s.avgIncline).toBe(4);
+    expect(s.last!.date).toBe('2026-11-28');
+    expect(s.points.at(-2)!.incline).toBe(4);
+  });
+});

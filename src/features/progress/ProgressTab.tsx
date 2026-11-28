@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { BarChart3, Zap } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { BarChart3, Footprints, Zap } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CollapsibleCard } from '../../components/ui';
 import { buildTomorrowSuggestion } from '../../domain/suggestion';
-import { RANGES, buildProteinSeries, bucketWord, muscleBalance, type RangeKey } from '../../domain/progressSeries';
-import { formatDateISO } from '../../lib/dates';
+import { RANGES, buildCardioSeries, buildProteinSeries, bucketWord, muscleBalance, type RangeKey } from '../../domain/progressSeries';
+import { formatDateISO, shortDateLabel } from '../../lib/dates';
 import type { Profile, UpdateProfile } from '../../types';
 import ProteinDiary from './ProteinDiary';
 import WorkoutDiary from './WorkoutDiary';
@@ -43,6 +43,11 @@ export default function ProgressTab({ profile, updateProfile }: Props) {
   const target = profile.proteinTargetG;
   const series = buildProteinSeries(profile.proteinLogs, today, range, target);
   const balance = muscleBalance(profile.circuitLogs, today, range);
+  const cardio = buildCardioSeries(profile.circuitLogs, today, range);
+  const last = cardio.last;
+  const cardioHeadline = !last ? 'No walks or treadmill sessions with a speed yet'
+    : `Last: ${last.reps} min at ${last.speedKmh} km/h${last.inclinePct != null ? `, incline ${last.inclinePct}%` : ''} (${shortDateLabel(last.date)})`
+      + (cardio.sessions ? ` · ${rangeLabel}: ${cardio.sessions} sessions, ${cardio.minutes} min` : '');
 
   const proteinHeadline = series.avg === null
     ? `Nothing logged in ${rangeLabel === 'All' ? 'the log' : `the last ${rangeLabel}`} · target ${target} g`
@@ -77,6 +82,33 @@ export default function ProgressTab({ profile, updateProfile }: Props) {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </CollapsibleCard>
+
+      <CollapsibleCard icon={<Footprints className="w-5 h-5" />} title="Walk & treadmill" headline={cardioHeadline}>
+        <RangePicker value={range} onChange={setRange} />
+        {cardio.sessions === 0 ? (
+          <p className="text-sm text-slate-600">No walks or treadmill sessions with a speed in this range. Add one with the Walk or cardio card on Today.</p>
+        ) : (
+          <>
+            <p className="text-sm text-slate-700 mb-2">
+              Average speed {cardio.avgSpeed} km/h{cardio.avgIncline != null ? ` · average treadmill incline ${cardio.avgIncline}%` : ''}.
+              {cardio.bucket === 'day' ? ' One point per day.' : ` Each point is a ${bucketWord(cardio.bucket)}.`}
+            </p>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={cardio.points} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} interval="preserveStartEnd" minTickGap={18} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 13 }} />
+                  <Line type="monotone" dataKey="speed" name="Speed (km/h)" stroke="#047857" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+                  <Line type="monotone" dataKey="incline" name="Incline (%)" stroke="#d97706" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
       </CollapsibleCard>
 
       <CollapsibleCard icon={<Zap className="w-5 h-5" />} title="Muscle & fitness balance" headline={balanceHeadline}>

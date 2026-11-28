@@ -41,7 +41,7 @@ try {
   await page.getByLabel('Walk speed km per hour').fill('4.8');
   check('A4 distance worked out from speed', await page.getByText('That is 2.4 km at 4.8 km/h.').isVisible());
   await page.getByRole('button', { name: 'Save walk' }).click();
-  check('A5 walk saved and listed', await page.getByText(/Evening walk \(road\)/).first().isVisible() && await page.getByText(/30 min · 2\.4 km at 4\.8 km\/h/).isVisible());
+  check('A5 walk saved and listed', await page.getByText(/Evening walk \(road\)/).first().isVisible() && await page.getByText(/30 min at 4\.8 km\/h · 2\.4 km/).isVisible());
   const st = JSON.parse(await page.evaluate(() => localStorage.getItem('evidencefit_app_state_v1')));
   const w = st.profiles[0].circuitLogs.find((x) => x.entries[0].name === 'Evening walk (road)');
   check('A6 walk stored as a circuit with speed and kcal', !!w && w.entries[0].speedKmh === 4.8 && w.entries[0].unit === 'min' && w.estKcal > 50, w ? `${w.estKcal} kcal` : 'missing');

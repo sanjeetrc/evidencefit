@@ -82,3 +82,34 @@ export function muscleBalance(logs: LoggedWorkout[], today: string, range: Range
 }
 
 export const bucketWord = (b: Bucket) => (b === 'day' ? 'per day' : b === 'week' ? 'weekly average' : 'monthly average');
+
+export interface CardioPoint { key: string; label: string; speed: number | null; incline: number | null; minutes: number }
+export interface CardioSeries { bucket: Bucket; points: CardioPoint[]; sessions: number; minutes: number; avgSpeed: number | null; avgIncline: number | null; last: CircuitEntryLike & { date: string } | null }
+type CircuitEntryLike = { name: string; reps: number; unit: string; speedKmh?: number | null; inclinePct?: number | null };
+
+const isTimedWalk = (e: CircuitEntryLike) =>
+  e.unit === 'min' && (e.speedKmh ?? 0) > 0 && /treadmill|walk|jog|run/i.test(e.name);
+
+/** Walks and treadmill sessions that have a speed: average speed and incline per day / week / month, plus minutes. */
+export function buildCardioSeries(logs: LoggedWorkout[], today: string, range: RangeKey): CardioSeries {
+  const items = logs.flatMap((w) => w.entries.filter(isTimedWalk).map((e) => ({ ...e, date: w.date }))).filter((e) => e.date <= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const start = rangeStart(range, today, items[0]?.date ?? null);
+  const bucket = bucketFor(daysBetween(start, today) + 1);
+  const acc = new Map<string, { s: number; n: number; i: number; ni: number; m: number }>();
+  for (let d = start; d <= today; d = addDays(d, 1)) { const k = bucketKey(d, bucket); if (!acc.has(k)) acc.set(k, { s: 0, n: 0, i: 0, ni: 0, m: 0 }); }
+  let s = 0; let n = 0; let i = 0; let ni = 0; let m = 0;
+  const inRange = items.filter((e) => e.date >= start);
+  for (const e of inRange) {
+    const a = acc.get(bucketKey(e.date, bucket))!;
+    a.s += e.speedKmh!; a.n += 1; a.m += e.reps; s += e.speedKmh!; n += 1; m += e.reps;
+    if (e.inclinePct != null) { a.i += e.inclinePct; a.ni += 1; i += e.inclinePct; ni += 1; }
+  }
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+  return {
+    bucket, sessions: n, minutes: Math.round(m),
+    avgSpeed: n ? r1(s / n) : null, avgIncline: ni ? r1(i / ni) : null,
+    last: items.at(-1) ?? null,
+    points: [...acc.entries()].map(([key, a]) => ({ key, label: bucketLabel(key, bucket), speed: a.n ? r1(a.s / a.n) : null, incline: a.ni ? r1(a.i / a.ni) : null, minutes: Math.round(a.m) })),
+  };
+}
