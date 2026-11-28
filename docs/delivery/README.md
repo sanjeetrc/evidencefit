@@ -120,3 +120,15 @@ Owner reported no way to log an evening road walk at 4.8 km/h. Today now has a "
 - Recharts makes the bundle large; could lazy-load the Progress tab.
 - Gemini model name defaults to the prototype's `gemini-3-flash-preview`; editable in Settings.
 - Guidance is general and does not replace a doctor; screening is self-reported.
+
+## 2026-11-28 — Rebuild on the circuit-logging app
+
+The live app was replaced by the owner's preferred circuit-logging app (previously run only on a laptop), with these changes:
+
+- Added: Walk / cardio card on Today (activity, place, time of day, minutes + speed or distance).
+- Added: Settings → Backup & Export → "Restore from Google Drive" (Google Identity Services token, `drive.readonly`, newest `evidencefit-data.json`, token revoked afterwards). Client ID built in via `.env.production`.
+- Removed: the "Before you train" symptom check.
+- Progress kept compact as data grows: collapsible sections with one-line summaries; 4 wks / 3 mo / 1 yr / All range buttons (default 4 wks); daily bars up to 8 weeks, weekly averages beyond, monthly beyond 2 years; diaries show 10 days at a time.
+- Data from the earlier plan-based version (same localStorage key) is converted to circuit logs on load; nothing is deleted.
+- Served under `/evidencefit/` (Vite `base`, service-worker scope-relative paths, relative manifest).
+- Checks: `tsc -b`, 44 unit tests, ESLint, `vite build`, `e2e/smoke.mjs` (walk, mocked Drive restore, old-data migration).

@@ -1,34 +1,36 @@
 {
   "name": "evidencefit",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:single": "vite build --mode single",
+    "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc -b",
-    "test": "vitest run",
-    "e2e": "node e2e/smoke.mjs"
+    "test": "vitest run"
   },
   "dependencies": {
-    "lucide-react": "0.460.0",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "recharts": "2.13.3"
+    "lucide-react": "^1.77.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "recharts": "^3.11.0"
   },
   "devDependencies": {
-    "@types/react": "18.3.12",
-    "@types/react-dom": "18.3.1",
-    "@vitejs/plugin-react": "4.3.4",
-    "autoprefixer": "10.4.20",
-    "postcss": "8.4.49",
-    "tailwindcss": "3.4.15",
-    "typescript": "5.6.3",
-    "vite": "5.4.11",
-    "vite-plugin-pwa": "0.21.1",
-    "vite-plugin-singlefile": "2.0.3",
-    "vitest": "2.1.8"
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.2"
   }
 }

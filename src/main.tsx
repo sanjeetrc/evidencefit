@@ -1,24 +1,15 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App';
-import { ErrorBoundary } from './ui/common';
-import './index.css';
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App.tsx'
+import { registerServiceWorker, requestPersistentStorage } from './lib/persist'
+
+// Data lives only in this browser: ask Chrome not to evict it, and cache the app shell for offline use.
+void requestPersistentStorage()
+registerServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>
-);
-
-// A new version takes over as soon as it is downloaded; reload once so the
-// screen shows it. Unsaved session entries survive (drafts are kept locally).
-if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-  let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloaded) return;
-    reloaded = true;
-    window.location.reload();
-  });
-}
+    <App />
+  </StrictMode>,
+)

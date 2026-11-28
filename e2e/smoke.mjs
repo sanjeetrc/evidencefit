@@ -1,227 +1,102 @@
-// End-to-end smoke test of the critical journeys on a phone-sized screen.
-// Usage: npm run build && npm run e2e   (serves dist/ with `vite preview`)
+// Smoke test on a phone-sized screen: serves dist/ under /evidencefit/ and checks the key journeys.
+// Usage: npm run build && node e2e/smoke.mjs   (Playwright from the project or NODE_PATH)
 import { createRequire } from 'node:module';
-// Uses the project's playwright if installed, else the machine's global one (via NODE_PATH).
+import { mkdirSync } from 'node:fs';
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
-import { preview } from 'vite';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+const { preview } = await import('vite');
 
-const PORT = 4179;
+const PORT = 4190;
 const OUT = process.env.E2E_OUT || 'e2e/out';
 mkdirSync(OUT, { recursive: true });
 const server = await preview({ preview: { port: PORT, strictPort: true }, logLevel: 'silent' });
-
+const URL0 = `http://localhost:${PORT}/evidencefit/`;
 const results = [];
-const check = (name, ok, detail = '') => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`); };
-
+const check = (name, ok, detail = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`); };
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ ...devices['Pixel 7'], acceptDownloads: true });
-const page = await ctx.newPage();
 const errors = [];
-page.on('pageerror', (e) => errors.push(e.message));
-page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-const shot = (n) => page.screenshot({ path: `${OUT}/${n}.png`, fullPage: true });
+const newPage = async () => {
+  const ctx = await browser.newContext({ ...devices['Pixel 7'] });
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && errors.push(m.text()));
+  return page;
+};
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const nav = (page, n) => page.getByRole('button', { name: n, exact: true }).last().click();
 
 try {
-  await page.goto(`http://localhost:${PORT}/`);
-
-  // J1: first run
-  await page.getByLabel('Your name').fill('Test User');
+  // A: first run, Today has no symptom check, walk logging works
+  let page = await newPage();
+  await page.goto(URL0);
+  await page.getByLabel('Your name').fill('Test');
   await page.getByLabel('Age').fill('66');
   await page.getByLabel('Weight (kg)').fill('74');
-  await shot('01-welcome');
   await page.getByRole('button', { name: 'Start' }).click();
-  check('J1 first run creates profile', await page.getByRole('heading', { name: "Today's readiness" }).isVisible());
-
-  // J2: protein logging, 60+ per-meal target
-  await page.getByRole('button', { name: 'Fish', exact: true }).click();
-  check('J2 fish offers small / medium / large piece', (await page.getByRole('group', { name: 'Fish piece size' }).getByRole('button').count()) === 3);
-  await page.getByRole('button', { name: 'More pieces' }).click();
-  await page.getByRole('button', { name: 'Add 2 medium pieces: 28 g protein' }).click();
-  await page.getByRole('button', { name: 'Paneer', exact: true }).click();
-  await page.getByRole('group', { name: 'Paneer piece size' }).getByRole('button', { name: /^Large piece/ }).click();
-  await page.getByRole('button', { name: 'More pieces' }).click();
-  await page.getByRole('button', { name: 'More pieces' }).click();
-  await page.getByRole('button', { name: 'Add 3 large pieces: 15 g protein' }).click();
-  check('J2 pieces add to today (2 medium fish + 3 large paneer = 43 g)', (await page.locator('text=43 g').first().count()) > 0);
-  await page.getByRole('button', { name: 'One less: Paneer: 3 large pieces' }).click();
-  check('J2 minus takes one piece off', await page.getByText('Paneer: 2 large pieces').isVisible() && (await page.locator('text=38 g').first().count()) > 0);
-  await page.getByRole('button', { name: 'One more: Paneer: 2 large pieces' }).click();
-  await page.getByRole('button', { name: /^Remove Paneer/ }).click();
-  check('J2 remove takes it off', (await page.getByRole('button', { name: /^Remove Paneer/ }).count()) === 0 && (await page.locator('text=28 g').first().count()) > 0);
-  await page.getByRole('button', { name: 'Undo' }).click();
-  check('J2 undo puts it back', (await page.locator('text=43 g').first().count()) > 0);
-  check('J2 60+ per-meal target shown (0.4 g/kg = 30 g)', await page.getByText(/at least 30 g at each meal/).isVisible());
-
-  // J3: log Monday's session with "done as planned", save, see it in history
-  await page.getByLabel('Session template').selectOption('Mon');
-  await page.getByLabel('Sleep hours').fill('7');
-  const leg = page.getByRole('article', { name: 'Leg press' });
-  await leg.getByLabel('Leg press set 1 load kg').fill('60');
-  await leg.getByRole('button', { name: 'Done as planned' }).click();
-  await leg.getByLabel('Leg press set 2 pain 0 to 10').fill('2');
-  await leg.getByRole('button', { name: 'How to score pain' }).click();
-  check('J3 pain guide explains the scale', await leg.getByText(/Effort, burning muscles and breathlessness are not pain/).isVisible());
-  await leg.getByRole('group', { name: 'Leg press pain side' }).getByRole('button', { name: 'Left' }).click();
-  await leg.getByLabel('Leg press pain area').selectOption('Knee');
-  check('J3 mild pain guidance shown', await leg.getByText(/Mild pain \(2\/10\)/).isVisible());
-  check('J3 push-ups and triceps push-down in Monday plan',
-    (await page.getByRole('article', { name: /^Push-ups/ }).count()) === 1 && (await page.getByRole('article', { name: 'Cable triceps push-down' }).count()) === 1);
-  const pd = page.getByRole('article', { name: 'Cable triceps push-down' });
-  await pd.getByRole('group', { name: 'Cable triceps push-down weight unit' }).getByRole('button', { name: 'lb' }).click();
-  await pd.getByLabel('Cable triceps push-down set 1 load lb').fill('50');
-  await pd.getByRole('button', { name: 'Done as planned' }).click();
-  await shot('02-today-logger');
-  await page.getByRole('button', { name: 'Save session' }).click();
-  check('J3 session saved', await page.getByText(/Session saved: 2 exercise/).isVisible());
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();
-  check('J3 session in history', await page.getByText(/Leg press 3×/).isVisible());
-  // (weights typed once carry to the following sets: checked in the backup below)
-  await shot('03-progress');
-
-  // J4: health screen drives warnings (glaucoma → avoid head-down Surya Namaskar)
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Settings' }).click();
-  await page.getByText('Glaucoma / retinal condition').click();
-  await page.getByText('Cardiovascular disease').click();
-  check('J4 screening shows vigorous restriction', await page.getByText('Moderate work is fine; vigorous needs clearance').first().isVisible());
-  await shot('04-settings');
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Today' }).click();
-  await page.getByLabel('Session template').selectOption('Tue');
-  const surya = page.getByRole('article', { name: /Surya Namaskar/ });
-  check('J4 glaucoma flags Surya Namaskar', await surya.getByText(/Avoid: Head-down/).isVisible());
-  const row = page.getByRole('article', { name: 'Dumbbell one-arm row' });
-  check('J4 one-arm row has separate left and right sets',
-    (await row.getByLabel('Dumbbell one-arm row set 1 left reps').count()) === 1 && (await row.getByLabel('Dumbbell one-arm row set 2 right reps').count()) === 1);
-  check('J4 band triceps push-down on the home day', (await page.getByRole('article', { name: 'Band triceps push-down' }).count()) === 1);
-  await page.getByLabel('Session template').selectOption('Wed');
-  const intervals = page.getByRole('article', { name: /Intervals/ });
-  check('J4 intervals blocked until cleared', await intervals.getByText(/Avoid: Vigorous/).isVisible());
-  check('J4 RPE capped at 6', await page.getByText(/RPE 6 \(capped\)/).first().isVisible());
-
-  // J9: evening road walk at 4.8 km/h
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Today' }).click();
+  await page.getByText(/Next Suggested Focus/).first().waitFor();
+  check('A1 Today opens with the 4173 suggestion card', await page.getByText(/Next Suggested Focus/).first().isVisible());
+  check('A2 no "Before you train" symptom check', (await page.getByText(/Before you train/i).count()) === 0);
+  check('A3 walk card present', await page.getByRole('heading', { name: 'Walk or cardio' }).isVisible());
   await page.getByLabel('Time of day').selectOption('Evening');
-  await page.getByLabel('Cardio minutes').fill('30');
-  await page.getByLabel('Speed km per hour').fill('4.8');
-  check('J9 distance worked out from speed', await page.getByText(/That is 2\.4 km at 4\.8 km\/h/).isVisible());
+  await page.getByLabel('Walk minutes').fill('30');
+  await page.getByLabel('Walk speed km per hour').fill('4.8');
+  check('A4 distance worked out from speed', await page.getByText('That is 2.4 km at 4.8 km/h.').isVisible());
   await page.getByRole('button', { name: 'Save walk' }).click();
-  check('J9 walk listed on Today', await page.getByText('road: 30 min · 2.4 km · 4.8 km/h').isVisible());
-  await shot('07-walk');
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();
-  check('J9 walk shown in Progress', (await page.getByText(/Evening walk, road: 30 min · 2\.4 km · 4\.8 km\/h/).count()) > 0);
-  check('J9 counts toward aerobic minutes', (await page.getByText(/^30 \/ 150\+$/).count()) > 0 || (await page.locator('text=/\b30 \/ 150\+/').count()) > 0);
-
-  const nav = (n) => page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: n }).click();
-  await nav('Today');
-
-  // J12: log for an earlier day
-  const yLabel = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(12); return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); });
-  await page.getByRole('group', { name: 'Logging for' }).getByRole('button', { name: 'Yesterday' }).click();
-  check('J12 earlier day is clearly marked', await page.getByText(new RegExp(`Logging for \\w+ ${yLabel}\\. Sessions, walks and protein`)).isVisible());
-  check('J12 protein card follows the chosen day', await page.getByRole('heading', { name: `Protein on ${yLabel}` }).isVisible());
-
-  // J13: type the whole circuit, read offline, save to the chosen day
-  await page.getByText('Type or say the whole circuit').click();
-  await page.getByLabel('Circuit in your words').fill('leg press 40 kg 3 by 12 rir 2, plank 3 x 30 seconds, hip thrust');
-  await page.getByRole('button', { name: 'Read it' }).click();
-  check('J13 circuit read into exercises', await page.getByText('3 × 12 reps · 40 kg · RPE 8').isVisible() && await page.getByText('3 × 30 sec').isVisible());
-  check('J13 piece without reps is flagged, not saved', await page.getByText('No reps or time found for:').isVisible());
-  await shot('09-circuit');
-  await page.getByRole('button', { name: new RegExp(`Save circuit for ${yLabel} \\(2\\)`) }).click();
-  check('J13 circuit saved', await page.getByText(new RegExp(`Circuit saved for ${yLabel}: 2 exercise`)).isVisible());
+  check('A5 walk saved and listed', await page.getByText(/Evening walk \(road\)/).first().isVisible() && await page.getByText(/30 min · 2\.4 km at 4\.8 km\/h/).isVisible());
   const st = JSON.parse(await page.evaluate(() => localStorage.getItem('evidencefit_app_state_v1')));
-  const prof = st.profiles.find((x) => x.id === st.activeProfileId);
-  const circ = prof.workouts.find((w) => w.title === 'Circuit (typed or spoken)');
-  const yISO = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
-  check('J13 saved to yesterday with 3 leg press sets', !!circ && circ.date === yISO && circ.exercises[0].sets.length === 3 && circ.exercises[0].sets[0].rpe === 8, circ ? circ.date : 'missing');
-  await page.getByRole('group', { name: 'Logging for' }).getByRole('button', { name: 'Today' }).click();
-  check('J12 back to today', await page.getByRole('heading', { name: 'Protein today' }).isVisible());
+  const w = st.profiles[0].circuitLogs.find((x) => x.entries[0].name === 'Evening walk (road)');
+  check('A6 walk stored as a circuit with speed and kcal', !!w && w.entries[0].speedKmh === 4.8 && w.entries[0].unit === 'min' && w.estKcal > 50, w ? `${w.estKcal} kcal` : 'missing');
+  await page.screenshot({ path: `${OUT}/today.png`, fullPage: true });
 
-  // J14: next suggested focus, quick add, fuller protein list (from the older app)
-  check('J14 next suggested focus with gym and home options', await page.getByRole('heading', { name: /^Next suggested focus: / }).isVisible()
-    && await page.getByText('Gym option', { exact: true }).isVisible() && await page.getByText('Home option', { exact: true }).isVisible());
-  await page.getByRole('group', { name: 'Quick add list' }).getByRole('button', { name: 'Home' }).click();
-  check('J14 picking Home sets the session place', (await page.getByLabel('Location').inputValue()) === 'Home');
-  await page.getByRole('group', { name: 'Quick add exercises' }).getByRole('button', { name: /Dumbbell row/ }).click();
-  check('J14 one tap adds the exercise with 3 sets', (await page.getByRole('article', { name: 'Dumbbell row' }).count()) === 1);
-  await page.getByRole('group', { name: 'Quick add list' }).getByRole('button', { name: 'Mobility' }).click();
-  check('J14 mobility list offered', await page.getByRole('group', { name: 'Quick add exercises' }).getByRole('button', { name: /Cat-cow/ }).isVisible());
-  await page.getByRole('button', { name: 'Goat (mutton)', exact: true }).click();
-  check('J14 goat offered by piece size', (await page.getByRole('group', { name: 'Goat (mutton) piece size' }).getByRole('button').count()) === 3);
-  check('J14 pork and beef offered', await page.getByRole('button', { name: 'Pork', exact: true }).isVisible() && await page.getByRole('button', { name: 'Beef', exact: true }).isVisible());
-  await shot('10-focus-quickadd');
-
-  // J5: persistence across reload
-  await page.reload();
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();
-  check('J5 data survives reload', await page.getByText(/Leg press 3×/).first().isVisible());
-
-  // J6: backup excludes API key; corrupt import is rejected without crashing
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Settings' }).click();
-  await page.getByLabel('Gemini API key').fill('TEST-SECRET-KEY');
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download backup/ }).click()]);
-  const path = `${OUT}/backup.json`;
-  await dl.saveAs(path);
-  const backup = readFileSync(path, 'utf8');
-  check('J6 backup has data', backup.includes('Leg press'));
-  const saved = JSON.parse(backup).profiles[0].workouts[0].exercises.find((e) => e.name === 'Leg press');
-  check('J6 one typed weight carries to every set', saved.sets.every((x) => x.loadKg === 60), saved.sets.map((x) => x.loadKg).join('/'));
-  check('J6 backup excludes API key', !backup.includes('TEST-SECRET-KEY'));
-  check('J6 backup keeps pain site and lb unit', backup.includes('"painSite": "Left knee"') && backup.includes('"loadUnit": "lb"'));
-  writeFileSync(`${OUT}/corrupt.json`, '{"profiles": "nope"}');
-  await page.locator('input[type=file]').setInputFiles(`${OUT}/corrupt.json`);
-  check('J6 corrupt backup rejected with message', await page.getByText('Backup contains no profiles.').isVisible());
-
-  // J7: AI coach off → no network call, local answer
-  const gemini = [];
-  page.on('request', (r) => r.url().includes('generativelanguage') && gemini.push(r.url()));
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Coach' }).click();
-  await page.getByRole('button', { name: /Weekly audit/ }).click();
-  await page.getByText(/Local summary/).waitFor();
-  check('J7 coach off: local answer, no request to Google', gemini.length === 0);
-  await shot('05-coach');
-
-  // J10: one-click restore from Google Drive (Google is mocked; nothing leaves the machine)
+  // B: Restore from Google Drive (Google mocked)
   const driveCalls = [];
   await page.route('https://accounts.google.com/gsi/client', (r) => r.fulfill({ contentType: 'text/javascript', body:
-    "window.google={accounts:{oauth2:{initTokenClient:(c)=>(window.__clientId=c.client_id,{requestAccessToken:()=>setTimeout(()=>c.callback({access_token:'tok'}),10)}),revoke:(t,d)=>{window.__revoked=t;d&&d();}}}};" }));
+    "window.google={accounts:{oauth2:{initTokenClient:(c)=>(window.__cid=c.client_id,window.__scope=c.scope,{requestAccessToken:()=>setTimeout(()=>c.callback({access_token:'tok'}),10)}),revoke:(t,d)=>{window.__revoked=t;d&&d();}}}};" }));
+  const y = new Date(); y.setDate(y.getDate() - 1);
   await page.route('https://www.googleapis.com/drive/v3/files**', (r) => {
     const u = r.request().url(); driveCalls.push({ u, auth: r.request().headers()['authorization'] });
     if (u.includes('alt=media')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 2, activeProfileId: 'g1', aiCoach: { apiKey: 'FILE-KEY' },
-      profiles: [{ id: 'g1', name: 'From Drive', age: 66, weightKg: 74, conditions: {}, medications: {}, defaultLoadUnit: 'lb',
-        circuitLogs: [{ id: 'c1', date: '2026-11-26', location: 'Gym', climate: 'Normal', notes: '', entries: [{ id: 'e1', name: 'Bench press', sets: 3, load: 140, loadUnit: 'lb', reps: 9, unit: 'reps', rir: 1, pain: 0 }] }],
-        proteinLogs: {} }] }) });
+      profiles: [{ id: 'g1', name: 'From Drive', age: 66, weightKg: 74, conditions: {}, medications: {}, defaultLoadUnit: 'lb', proteinLogs: {},
+        circuitLogs: [{ id: 'c1', date: iso(y), location: 'Gym', climate: 'Normal', notes: '', entries: [{ id: 'e1', name: 'Leg press', sets: 3, load: 140, loadUnit: 'lb', reps: 9, unit: 'reps', rir: 1, pain: 0 }] }] }] }) });
     return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ files: [{ id: 'FILEID', modifiedTime: '2026-11-28T04:35:38Z', size: '900' }] }) });
   });
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Settings' }).click();
-  check('J10 Drive: no setup needed (client ID built in)', (await page.getByLabel('Google client ID').count()) === 0);
+  await nav(page, 'Settings');
+  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Restore from Google Drive' }).click();
-  await page.getByText(/evidencefit-data\.json, saved .* has 1 person\(s\) and 1 session\(s\)/).waitFor({ timeout: 10000 });
-  check('J10 Drive: finds the newest evidencefit-data.json with a read-only token', driveCalls.length === 2 && driveCalls.every((c) => c.auth === 'Bearer tok') && driveCalls[0].u.includes('evidencefit-data.json'));
-  await page.getByRole('button', { name: 'Restore', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();
-  check('J10 Drive: Gemini-app session restored', await page.getByText(/Gym session \(Gemini app\)/).first().isVisible());
-  check('J10 Drive: uses the built-in client ID', (await page.evaluate(() => window.__clientId)) === '911891516673-ebnqcbm5so459ouimcsorcl16ru7dfc6.apps.googleusercontent.com');
-  check('J10 Drive: access revoked after download', (await page.evaluate(() => window.__revoked)) === 'tok');
-  const stored = await page.evaluate(() => localStorage.getItem('evidencefit_app_state_v1') || '');
-  check('J10 Drive: key inside the file not kept', !stored.includes('FILE-KEY'));
+  await page.getByText('Restored from Google Drive.').waitFor({ timeout: 10000 });
+  check('B1 Drive restore uses the built-in client ID, read-only', (await page.evaluate(() => window.__cid)) === '911891516673-ebnqcbm5so459ouimcsorcl16ru7dfc6.apps.googleusercontent.com'
+    && (await page.evaluate(() => window.__scope)) === 'https://www.googleapis.com/auth/drive.readonly');
+  check('B2 finds evidencefit-data.json with the token', driveCalls.length === 2 && driveCalls.every((c) => c.auth === 'Bearer tok') && driveCalls[0].u.includes('evidencefit-data.json'));
+  check('B3 access revoked after download', (await page.evaluate(() => window.__revoked)) === 'tok');
+  const st2 = await page.evaluate(() => localStorage.getItem('evidencefit_app_state_v1'));
+  check('B4 restored data in place, file key not kept', st2.includes('From Drive') && st2.includes('Leg press') && !st2.includes('FILE-KEY'));
+  check('B5 undo copy offered', await page.getByRole('button', { name: /Undo last restore/ }).isVisible());
 
-  // J8: layout fits phone width
-  for (const tab of ['Today', 'Plan', 'Progress', 'Coach', 'Settings']) {
-    await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: tab }).click();
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    check(`J8 no horizontal scroll on ${tab}`, overflow <= 1, `overflow ${overflow}px`);
-  }
-  await shot('06-plan');
-
-  check('No console or page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  // C: data saved by the plan-based version (28 Nov) still loads
+  page = await newPage();
+  await page.goto(URL0);
+  await page.evaluate((d) => localStorage.setItem('evidencefit_app_state_v1', JSON.stringify({ version: 2, activeProfileId: 'p1', aiCoach: { enabled: false, apiKey: '', model: 'x', consentAt: null },
+    profiles: [{ id: 'p1', name: 'Old', age: 66, weightKg: 74, mealPattern: '3-meal', proteinTargetG: 104, conditions: {}, redFlags: {}, medications: {}, programVersion: 3, program: {},
+      proteinLogs: { [d]: [{ id: 'f1', mealSlot: 'Lunch', name: 'Fish: 2 medium pieces', grams: 28 }] }, benchmarks: [], chatHistory: [],
+      workouts: [{ id: 'w1', date: d, dayKey: 'Fri', title: 'Gym A', location: 'Gym', sleepHours: 7, restingHr: null, climate: 'Normal', notes: '',
+        exercises: [{ exerciseId: 'x1', name: 'Leg press', repMin: 10, repMax: 12, unit: 'reps', targetRpe: 7, loadUnit: 'kg',
+          sets: [{ loadKg: 60, reps: 12, rpe: 7, pain: 0 }, { loadKg: 60, reps: 11, rpe: 8, pain: 1 }] },
+          { exerciseId: 'x2', name: 'Walk, road (evening)', repMin: 30, repMax: 30, unit: 'min', targetRpe: 4, cardio: { activity: 'Walk', surface: 'Road', timeOfDay: 'Evening', distanceKm: null, speedKmh: 4.8 },
+            sets: [{ loadKg: 0, reps: 30, rpe: 4, pain: 0 }] }] }] }] })), iso(y));
+  await page.reload();
+  await page.getByText(/Next Suggested Focus/).first().waitFor();
+  const st3 = JSON.parse(await page.evaluate(() => localStorage.getItem('evidencefit_app_state_v1')));
+  const c = st3.profiles[0].circuitLogs?.[0];
+  check('C1 plan-version session converted to a circuit', !!c && c.entries.length === 2 && c.entries[0].sets === 2 && c.entries[0].load === 60 && c.entries[0].rir === 2 && c.entries[0].pain === 1,
+    c ? JSON.stringify(c.entries[0]) : 'none');
+  check('C2 walk speed kept', !!c && c.entries[1].speedKmh === 4.8 && c.entries[1].unit === 'min');
+  check('C3 protein kept', JSON.stringify(st3.profiles[0].proteinLogs).includes('Fish: 2 medium pieces'));
+  check('No page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 } catch (e) {
-  check('Run completed', false, e.message);
-  await shot('error');
+  check('Run completed', false, String(e).slice(0, 300));
 } finally {
   await browser.close();
   await server.close();
+  const passed = results.filter(Boolean).length;
+  console.log(`\n${passed}/${results.length} checks passed`);
+  process.exit(passed === results.length ? 0 : 1);
 }
-const failed = results.filter((r) => !r.ok).length;
-console.log(`\n${results.length - failed}/${results.length} checks passed`);
-process.exit(failed ? 1 : 0);
