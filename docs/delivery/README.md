@@ -96,7 +96,7 @@ Owner reported no way to log an evening road walk at 4.8 km/h. Today now has a "
 
 ## Release 1.5 (2026-11-28): restore from Google Drive
 - Settings has a "Restore from Google Drive" button. It signs in with Google (read-only Drive scope), finds the newest `evidencefit-data.json`, shows what it holds, and replaces this device's data only after you confirm. The sign-in token is revoked straight after the download.
-- Needs a Google OAuth client ID (Web application, authorised JavaScript origin `https://sanjeetrc.github.io`). Paste it once under "Set up Google Drive", or build it in with `VITE_GOOGLE_CLIENT_ID`.
+- Uses the app's own Google OAuth Web client ID (built in as `DEFAULT_CLIENT_ID`; authorised JavaScript origin `https://sanjeetrc.github.io`). `VITE_GOOGLE_CLIENT_ID` overrides it at build time. Only works on the GitHub Pages site, not inside Gemini Canvas.
 - Backups saved by the earlier Gemini Canvas version (with `circuitLogs`) are converted on import: each set becomes a logged set, RPE = 10 minus RIR. Any API keys in the file are ignored.
 - Tests: AC-17 (Gemini file import), e2e J10 (Drive restore with Google mocked).
 

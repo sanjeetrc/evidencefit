@@ -45,8 +45,7 @@ for rel in ORDER:
     if rel == 'ui/SettingsTab.tsx':
         src = must(src, 'placeholder="Gemini API key"', 'placeholder="Leave blank inside Gemini Canvas"', rel)
     # No Vite build in Canvas: there is no built-in Google client ID.
-    src = src.replace("(import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? ''", "''")
-    src = src.replace('import.meta.env.VITE_GOOGLE_CLIENT_ID', "''")
+    src = src.replace('(import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)', '(globalThis as { EVIDENCEFIT_CLIENT_ID?: string }).EVIDENCEFIT_CLIENT_ID').replace('import.meta.env.VITE_GOOGLE_CLIENT_ID', '(globalThis as { EVIDENCEFIT_CLIENT_ID?: string }).EVIDENCEFIT_CLIENT_ID')
     if rel == 'App.tsx':
         src = must(src, 'export default function App(', 'function EvidenceFitApp(', rel)
 

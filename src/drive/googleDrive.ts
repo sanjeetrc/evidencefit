@@ -10,12 +10,16 @@ const SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 const CLIENT_ID_KEY = 'evidencefit_google_client_id';
 
-/** Built-in client ID (set at build time), else one pasted in Settings on this device. */
+/** The app's own OAuth Web client ID (public by design; allowed origin: the GitHub Pages site). */
+export const DEFAULT_CLIENT_ID = '911891516673-ebnqcbm5so459ouimcsorcl16ru7dfc6.apps.googleusercontent.com';
+
+/** Build-time override, else the built-in default, else one pasted in Settings on this device. */
 export function getClientId(): string {
-  const built = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? '';
+  const built = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || DEFAULT_CLIENT_ID;
   if (built) return built;
   try { return localStorage.getItem(CLIENT_ID_KEY) ?? ''; } catch { return ''; }
 }
+export const hasBuiltInClientId = () => Boolean((import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || DEFAULT_CLIENT_ID);
 export const isValidClientId = (id: string) => /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(id.trim());
 export function saveClientId(id: string) {
   try { if (id) localStorage.setItem(CLIENT_ID_KEY, id.trim()); else localStorage.removeItem(CLIENT_ID_KEY); } catch { /* ignore */ }

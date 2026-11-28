@@ -144,7 +144,7 @@ try {
   // J10: one-click restore from Google Drive (Google is mocked; nothing leaves the machine)
   const driveCalls = [];
   await page.route('https://accounts.google.com/gsi/client', (r) => r.fulfill({ contentType: 'text/javascript', body:
-    "window.google={accounts:{oauth2:{initTokenClient:(c)=>({requestAccessToken:()=>setTimeout(()=>c.callback({access_token:'tok'}),10)}),revoke:(t,d)=>{window.__revoked=t;d&&d();}}}};" }));
+    "window.google={accounts:{oauth2:{initTokenClient:(c)=>(window.__clientId=c.client_id,{requestAccessToken:()=>setTimeout(()=>c.callback({access_token:'tok'}),10)}),revoke:(t,d)=>{window.__revoked=t;d&&d();}}}};" }));
   await page.route('https://www.googleapis.com/drive/v3/files**', (r) => {
     const u = r.request().url(); driveCalls.push({ u, auth: r.request().headers()['authorization'] });
     if (u.includes('alt=media')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 2, activeProfileId: 'g1', aiCoach: { apiKey: 'FILE-KEY' },
@@ -154,14 +154,14 @@ try {
     return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ files: [{ id: 'FILEID', modifiedTime: '2026-11-28T04:35:38Z', size: '900' }] }) });
   });
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Settings' }).click();
-  await page.getByLabel('Google client ID').fill('123456789-abcdef.apps.googleusercontent.com');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  check('J10 Drive: no setup needed (client ID built in)', (await page.getByLabel('Google client ID').count()) === 0);
   await page.getByRole('button', { name: 'Restore from Google Drive' }).click();
   await page.getByText(/evidencefit-data\.json, saved .* has 1 person\(s\) and 1 session\(s\)/).waitFor({ timeout: 10000 });
   check('J10 Drive: finds the newest evidencefit-data.json with a read-only token', driveCalls.length === 2 && driveCalls.every((c) => c.auth === 'Bearer tok') && driveCalls[0].u.includes('evidencefit-data.json'));
   await page.getByRole('button', { name: 'Restore', exact: true }).click();
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();
   check('J10 Drive: Gemini-app session restored', await page.getByText(/Gym session \(Gemini app\)/).first().isVisible());
+  check('J10 Drive: uses the built-in client ID', (await page.evaluate(() => window.__clientId)) === '911891516673-ebnqcbm5so459ouimcsorcl16ru7dfc6.apps.googleusercontent.com');
   check('J10 Drive: access revoked after download', (await page.evaluate(() => window.__revoked)) === 'tok');
   const stored = await page.evaluate(() => localStorage.getItem('evidencefit_app_state_v1') || '');
   check('J10 Drive: key inside the file not kept', !stored.includes('FILE-KEY'));

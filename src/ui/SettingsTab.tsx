@@ -5,7 +5,7 @@ import { CONDITION_ITEMS, MEDICATION_ITEMS, RED_FLAG_ITEMS } from '../domain/ref
 import { recommendedProteinTarget } from '../domain/state';
 import { AiCoachSettings, AppState, Profile } from '../domain/types';
 import { Card, CardHeader, NumInput } from './common';
-import { getClientId, isValidClientId, saveClientId } from '../drive/googleDrive';
+import { getClientId, hasBuiltInClientId, isValidClientId, saveClientId } from '../drive/googleDrive';
 
 interface Props {
   state: AppState;
@@ -35,7 +35,7 @@ const Toggle = ({ checked, onChange, label, note, tone }: { checked: boolean; on
 
 /** One-time setup: paste the Google OAuth client ID (public, not a secret). Hidden once built in. */
 function DriveSetup() {
-  const builtIn = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+  const builtIn = hasBuiltInClientId();
   const [value, setValue] = useState(() => getClientId());
   const [saved, setSaved] = useState(() => isValidClientId(getClientId()));
   if (builtIn) return null;
