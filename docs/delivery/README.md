@@ -94,6 +94,12 @@ Owner clarified that small / medium / large means the size of ONE piece. Each fo
 
 Owner reported no way to log an evening road walk at 4.8 km/h. Today now has a "Walk or cardio" card: walk / cycle / other; where (road, park or track, beach, treadmill, stationary cycle); morning / afternoon / evening (defaults from the clock); minutes plus either distance or speed (the other is worked out); effort by talk test (easy RPE 3, talk test RPE 4, brisk RPE 6; warns if above the screening cap); implausible speeds rejected. Each entry is its own session, counts toward weekly aerobic minutes, is excluded from strength progression, and appears in Session history, CSV (Activity, Surface, TimeOfDay, DistanceKm, SpeedKmh), backups and the coach summary. Progress shows a "Walks and cardio" card with a walking-speed trend. Evidence: 63 unit tests (AC-16), 35/35 phone checks.
 
+## Release 1.5 (2026-11-28): restore from Google Drive
+- Settings has a "Restore from Google Drive" button. It signs in with Google (read-only Drive scope), finds the newest `evidencefit-data.json`, shows what it holds, and replaces this device's data only after you confirm. The sign-in token is revoked straight after the download.
+- Needs a Google OAuth client ID (Web application, authorised JavaScript origin `https://sanjeetrc.github.io`). Paste it once under "Set up Google Drive", or build it in with `VITE_GOOGLE_CLIENT_ID`.
+- Backups saved by the earlier Gemini Canvas version (with `circuitLogs`) are converted on import: each set becomes a logged set, RPE = 10 minus RIR. Any API keys in the file are ignored.
+- Tests: AC-17 (Gemini file import), e2e J10 (Drive restore with Google mocked).
+
 ## Backup and restore (runbook)
 - Settings → *Download backup* (all people). The app nags after 14 days. Keep copies in Google Drive.
 - Restore: Settings → *Restore from backup* → confirm. Accepts prototype (v1) backups.

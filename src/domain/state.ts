@@ -1,5 +1,6 @@
 import { PROGRAM_VERSION, buildDefaultProgram, upgradeProgram } from './program';
-import { daysAgoISO, formatDateISO, isValidISODate } from './dates';
+import { daysAgoISO, formatDateISO, getDayKeyFromDate, isValidISODate } from './dates';
+import { fromUnit } from './units';
 import {
   AppState, Benchmark, CARDIO_ACTIVITIES, CONDITION_KEYS, CardioActivity, CardioDetail, TIMES_OF_DAY, TimeOfDay, ChatMessage, DAYS_OF_WEEK, DayKey, DayPlan, LoadUnit, LoggedExercise, LoggedSet,
   MEDICATION_KEYS, Profile, Program, ProgramExercise, ProteinItem, RED_FLAG_KEYS, Unit, Workout,
@@ -147,8 +148,45 @@ function parseLoggedExercise(v: unknown): LoggedExercise | null {
     loadUnit: loadUnit(v.loadUnit),
     tags: Array.isArray(v.tags) ? (v.tags as LoggedExercise['tags']) : undefined,
     painSite: str(v.painSite, '', 60) || undefined,
+    notes: str(v.notes, '', 200) || undefined,
     cardio: parseCardio(v.cardio),
     sets,
+  };
+}
+
+/**
+ * Converts one session from the Gemini Canvas app ({ date, location, entries: [{ name, sets: count,
+ * reps, load, loadUnit, rir, pain, unit, speedKmh, inclinePct }] }) into this app's workout shape.
+ * RIR (reps in reserve) maps to RPE as 10 − RIR. Output is still validated by parseWorkout.
+ */
+export function circuitLogToWorkout(c: unknown, defaultUnit: LoadUnit = 'kg'): unknown {
+  if (!isObj(c) || !isValidISODate(c.date)) return null;
+  const location = c.location === 'Gym' || c.location === 'Home' || c.location === 'Outdoor' ? c.location : 'Home';
+  const exercises = arr(c.entries).filter(isObj).map((e) => {
+    const u = unit(e.unit);
+    const lu: LoadUnit = e.loadUnit === 'lb' || e.loadUnit === 'kg' ? e.loadUnit : defaultUnit;
+    const load = numOrNull(e.load, 0, 2000);
+    const reps = num(e.reps, 0, 0, 600);
+    const rir = numOrNull(e.rir, 0, 10);
+    const count = Math.round(num(e.sets, 1, 1, 20));
+    const speed = numOrNull(e.speedKmh, 0, 80);
+    const incline = numOrNull(e.inclinePct, 0, 40);
+    const extra = [speed !== null ? `${speed} km/h` : '', incline !== null ? `incline ${incline}%` : ''].filter(Boolean).join(', ');
+    return {
+      exerciseId: str(e.id) || uid(),
+      name: str(e.name, 'Exercise', 120),
+      repMin: reps, repMax: reps, unit: u, targetRpe: 7, loadUnit: lu,
+      notes: extra,
+      sets: Array.from({ length: count }, () => ({
+        loadKg: load === null ? 0 : Math.round(fromUnit(load, lu) * 1000) / 1000,
+        reps, rpe: rir === null ? null : 10 - rir, pain: num(e.pain, 0, 0, 10),
+      })),
+    };
+  });
+  return {
+    id: str(c.id) || uid(), date: c.date, dayKey: getDayKeyFromDate(c.date),
+    title: `${location} session (Gemini app)`, location,
+    sleepHours: c.sleepHours, restingHr: c.restingHr ?? null, climate: c.climate, notes: str(c.notes, '', 1000), exercises,
   };
 }
 
@@ -236,7 +274,11 @@ export function parseProfile(v: unknown): Profile | null {
     clearedForVigorous: Boolean(v.clearedForVigorous),
     programVersion: PROGRAM_VERSION,
     program: upgradeProgram(parseProgram(v.program), num(v.programVersion, 1, 0, 1000)),
-    workouts: arr(v.workouts).map(parseWorkout).filter((w): w is Workout => w !== null),
+    workouts: [
+      ...arr(v.workouts).map(parseWorkout),
+      // The Gemini Canvas version of the app stores sessions as `circuitLogs`.
+      ...arr(v.circuitLogs).map((c) => parseWorkout(circuitLogToWorkout(c, v.defaultLoadUnit === 'lb' ? 'lb' : 'kg'))),
+    ].filter((w): w is Workout => w !== null),
     proteinLogs: parseProteinLogs(v.proteinLogs),
     benchmarks: arr(v.benchmarks).map(parseBenchmark).filter((b): b is Benchmark => b !== null),
     chatHistory: parseChat(v.chatHistory),

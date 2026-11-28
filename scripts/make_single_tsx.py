@@ -9,7 +9,7 @@ import re, sys, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / 'src'
 ORDER = ['domain/types.ts', 'domain/units.ts', 'domain/dates.ts', 'domain/program.ts', 'domain/reference.ts',
-         'domain/state.ts', 'domain/cardio.ts', 'domain/engine.ts', 'domain/csv.ts', 'ai/coach.ts', 'ui/common.tsx', 'ui/Timer.tsx',
+         'domain/state.ts', 'domain/cardio.ts', 'domain/engine.ts', 'domain/csv.ts', 'ai/coach.ts', 'drive/googleDrive.ts', 'ui/common.tsx', 'ui/Timer.tsx',
          'ui/CardioCard.tsx', 'ui/TodayTab.tsx', 'ui/ProgramTab.tsx', 'ui/TrendsTab.tsx', 'ui/CoachTab.tsx', 'ui/SettingsTab.tsx', 'App.tsx']
 EXTERNAL = ('react', 'lucide-react', 'recharts')
 
@@ -44,6 +44,9 @@ for rel in ORDER:
                    "const live = settings.enabled && !!settings.consentAt && (!!settings.apiKey || USES_CANVAS_KEY);", rel)
     if rel == 'ui/SettingsTab.tsx':
         src = must(src, 'placeholder="Gemini API key"', 'placeholder="Leave blank inside Gemini Canvas"', rel)
+    # No Vite build in Canvas: there is no built-in Google client ID.
+    src = src.replace("(import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? ''", "''")
+    src = src.replace('import.meta.env.VITE_GOOGLE_CLIENT_ID', "''")
     if rel == 'App.tsx':
         src = must(src, 'export default function App(', 'function EvidenceFitApp(', rel)
 

@@ -7,6 +7,7 @@ import {
   STORAGE_KEY, createBlankProfile, createDemoState, createFreshState, keepLocalKey, parseState, toBackup,
 } from './domain/state';
 import { AiCoachSettings, AppState, Profile } from './domain/types';
+import { DRIVE_FILE_NAME, fetchDriveBackup, getClientId, isValidClientId } from './drive/googleDrive';
 import { ConfirmModal, ModalState, downloadFile } from './ui/common';
 import { Draft, TodayTab } from './ui/TodayTab';
 import { ProgramTab } from './ui/ProgramTab';
@@ -47,6 +48,7 @@ export default function App() {
   const [modal, setModal] = useState<ModalState>({ open: false });
   const [prefillSwap, setPrefillSwap] = useState<{ exercise: string; pain: number; site?: string } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [driveBusy, setDriveBusy] = useState(false);
   const [storageInfo, setStorageInfo] = useState('Stored on this device');
   const toastTimer = useRef<number>();
 
@@ -122,6 +124,30 @@ export default function App() {
       });
     };
     reader.readAsText(file);
+  };
+
+  const restoreFromDrive = async () => {
+    const clientId = getClientId();
+    if (!isValidClientId(clientId)) return showToast('Google Drive is not set up yet: see "Set up Google Drive" below the button.', 'amber');
+    setDriveBusy(true);
+    try {
+      const b = await fetchDriveBackup(clientId);
+      const r = parseState(b.raw);
+      if (!r.ok) return showToast(r.error, 'amber');
+      const sessions = r.state.profiles.reduce((s, p) => s + p.workouts.length, 0);
+      const saved = new Date(b.modifiedTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+      confirm({
+        title: 'Restore from Google Drive?',
+        message: `${DRIVE_FILE_NAME}, saved ${saved}, has ${r.state.profiles.length} person(s) and ${sessions} session(s). Everything currently on this device will be replaced.`,
+        confirmLabel: 'Restore',
+        danger: true,
+        onConfirm: () => { setState(keepLocalKey(r.state, state)); setDrafts({}); showToast('Restored from Google Drive.'); },
+      });
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not restore from Google Drive.', 'amber');
+    } finally {
+      setDriveBusy(false);
+    }
   };
 
   const exportCsv = (kind: 'workouts' | 'protein') => {
@@ -213,7 +239,7 @@ export default function App() {
                   }) });
               }}
               onUpdateAi={(patch: Partial<AiCoachSettings>) => setState({ ...state, aiCoach: { ...state.aiCoach, ...patch } })}
-              onExportJSON={exportJSON} onImportJSON={importJSON} onExportCsv={exportCsv}
+              onExportJSON={exportJSON} onImportJSON={importJSON} onExportCsv={exportCsv} onRestoreDrive={restoreFromDrive} driveBusy={driveBusy}
               onLoadDemo={() => confirm({ title: 'Load demo data?', message: 'Your current data will be replaced by a demo person. Download a backup first if you need it.', confirmLabel: 'Load demo', danger: true,
                 onConfirm: () => { setState({ ...createDemoState(), aiCoach: state.aiCoach }); setDrafts({}); } })}
               onResetAll={() => startFresh('Erase everything?', 'All people, sessions, protein logs and test results on this phone will be permanently deleted.')} />

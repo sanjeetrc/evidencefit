@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { Bot, Database, Download, FileSpreadsheet, ShieldAlert, ShieldCheck, Upload, User, UserPlus, Users, X } from 'lucide-react';
+import { Bot, CloudDownload, Database, Download, FileSpreadsheet, ShieldAlert, ShieldCheck, Upload, User, UserPlus, Users, X } from 'lucide-react';
 import { Audit } from '../domain/engine';
 import { CONDITION_ITEMS, MEDICATION_ITEMS, RED_FLAG_ITEMS } from '../domain/reference';
 import { recommendedProteinTarget } from '../domain/state';
 import { AiCoachSettings, AppState, Profile } from '../domain/types';
 import { Card, CardHeader, NumInput } from './common';
+import { getClientId, isValidClientId, saveClientId } from '../drive/googleDrive';
 
 interface Props {
   state: AppState;
@@ -17,6 +18,8 @@ interface Props {
   onUpdateAi: (patch: Partial<AiCoachSettings>) => void;
   onExportJSON: () => void;
   onImportJSON: (f: File) => void;
+  onRestoreDrive: () => void;
+  driveBusy: boolean;
   onExportCsv: (kind: 'workouts' | 'protein') => void;
   onLoadDemo: () => void;
   onResetAll: () => void;
@@ -29,6 +32,27 @@ const Toggle = ({ checked, onChange, label, note, tone }: { checked: boolean; on
     <span className="text-sm"><span className="font-semibold text-slate-900">{label}</span>{note && <span className="block text-slate-600">{note}</span>}</span>
   </label>
 );
+
+/** One-time setup: paste the Google OAuth client ID (public, not a secret). Hidden once built in. */
+function DriveSetup() {
+  const builtIn = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+  const [value, setValue] = useState(() => getClientId());
+  const [saved, setSaved] = useState(() => isValidClientId(getClientId()));
+  if (builtIn) return null;
+  return (
+    <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm" open={!saved}>
+      <summary className="font-semibold text-slate-800 cursor-pointer min-h-[32px]">Set up Google Drive (one time) {saved ? '· done' : ''}</summary>
+      <p className="mt-2 text-slate-700">Paste the Google client ID ending in <code>.apps.googleusercontent.com</code>. It is not a password; it only lets this page ask Google for permission to read your Drive.</p>
+      <div className="mt-2 flex gap-2">
+        <input aria-label="Google client ID" value={value} onChange={(e) => setValue(e.target.value)} placeholder="1234…apps.googleusercontent.com"
+          className="flex-1 min-w-0 min-h-[44px] px-3 rounded-lg border border-slate-300 bg-white text-sm" />
+        <button type="button" className="shrink-0 px-4 min-h-[44px] rounded-lg bg-slate-900 text-white font-semibold disabled:opacity-50" disabled={!isValidClientId(value)}
+          onClick={() => { saveClientId(value.trim()); setSaved(true); }}>Save</button>
+      </div>
+      {value && !isValidClientId(value) && <p className="mt-1 text-amber-900">That does not look like a client ID yet.</p>}
+    </details>
+  );
+}
 
 export function SettingsTab(props: Props) {
   const { state, profile, audit, updateProfile } = props;
@@ -127,16 +151,21 @@ export function SettingsTab(props: Props) {
       <Card>
         <CardHeader icon={<Database className="w-5 h-5" />} title="Your data" subtitle={props.storageInfo} />
         <p className="text-sm text-slate-700 mb-3">
-          Everything is stored only in this browser on this phone. Nothing is uploaded. Download a backup regularly and keep it in Google Drive or email it to yourself.
+          Everything is stored only in this browser on this device. Nothing is uploaded. Download a backup regularly and keep it in Google Drive or email it to yourself.
           {state.lastBackupAt ? ` Last backup: ${new Date(state.lastBackupAt).toLocaleDateString('en-IN')}.` : ' No backup yet.'}
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <button type="button" onClick={props.onExportJSON} className="flex items-center justify-center gap-2 min-h-[48px] rounded-xl bg-emerald-700 text-white text-sm font-semibold"><Download className="w-4 h-4" aria-hidden /> Download backup (all people)</button>
           <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center justify-center gap-2 min-h-[48px] rounded-xl border border-slate-300 text-sm font-semibold"><Upload className="w-4 h-4" aria-hidden /> Restore from backup</button>
+          <button type="button" onClick={props.onRestoreDrive} disabled={props.driveBusy}
+            className="sm:col-span-2 flex items-center justify-center gap-2 min-h-[48px] rounded-xl bg-sky-800 text-white text-sm font-semibold disabled:opacity-60">
+            <CloudDownload className="w-4 h-4" aria-hidden /> {props.driveBusy ? 'Opening Google Drive…' : 'Restore from Google Drive'}
+          </button>
           <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImportJSON(f); e.target.value = ''; }} />
           <button type="button" onClick={() => props.onExportCsv('workouts')} className="flex items-center justify-center gap-2 min-h-[48px] rounded-xl border border-slate-300 text-sm font-semibold"><FileSpreadsheet className="w-4 h-4" aria-hidden /> Sessions as spreadsheet (CSV)</button>
           <button type="button" onClick={() => props.onExportCsv('protein')} className="flex items-center justify-center gap-2 min-h-[48px] rounded-xl border border-slate-300 text-sm font-semibold"><FileSpreadsheet className="w-4 h-4" aria-hidden /> Protein as spreadsheet (CSV)</button>
         </div>
+        <DriveSetup />
         <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
           <button type="button" onClick={props.onLoadDemo} className="px-3 min-h-[40px] rounded-lg text-sm font-semibold bg-slate-100">Load demo data</button>
           <button type="button" onClick={props.onResetAll} className="px-3 min-h-[40px] rounded-lg text-sm font-semibold text-rose-800 bg-rose-50 border border-rose-200">Erase everything</button>

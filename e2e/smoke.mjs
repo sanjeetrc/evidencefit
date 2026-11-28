@@ -141,6 +141,31 @@ try {
   check('J7 coach off: local answer, no request to Google', gemini.length === 0);
   await shot('05-coach');
 
+  // J10: one-click restore from Google Drive (Google is mocked; nothing leaves the machine)
+  const driveCalls = [];
+  await page.route('https://accounts.google.com/gsi/client', (r) => r.fulfill({ contentType: 'text/javascript', body:
+    "window.google={accounts:{oauth2:{initTokenClient:(c)=>({requestAccessToken:()=>setTimeout(()=>c.callback({access_token:'tok'}),10)}),revoke:(t,d)=>{window.__revoked=t;d&&d();}}}};" }));
+  await page.route('https://www.googleapis.com/drive/v3/files**', (r) => {
+    const u = r.request().url(); driveCalls.push({ u, auth: r.request().headers()['authorization'] });
+    if (u.includes('alt=media')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 2, activeProfileId: 'g1', aiCoach: { apiKey: 'FILE-KEY' },
+      profiles: [{ id: 'g1', name: 'From Drive', age: 66, weightKg: 74, conditions: {}, medications: {}, defaultLoadUnit: 'lb',
+        circuitLogs: [{ id: 'c1', date: '2026-11-26', location: 'Gym', climate: 'Normal', notes: '', entries: [{ id: 'e1', name: 'Bench press', sets: 3, load: 140, loadUnit: 'lb', reps: 9, unit: 'reps', rir: 1, pain: 0 }] }],
+        proteinLogs: {} }] }) });
+    return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ files: [{ id: 'FILEID', modifiedTime: '2026-11-28T04:35:38Z', size: '900' }] }) });
+  });
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Settings' }).click();
+  await page.getByLabel('Google client ID').fill('123456789-abcdef.apps.googleusercontent.com');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Restore from Google Drive' }).click();
+  await page.getByText(/evidencefit-data\.json, saved .* has 1 person\(s\) and 1 session\(s\)/).waitFor({ timeout: 10000 });
+  check('J10 Drive: finds the newest evidencefit-data.json with a read-only token', driveCalls.length === 2 && driveCalls.every((c) => c.auth === 'Bearer tok') && driveCalls[0].u.includes('evidencefit-data.json'));
+  await page.getByRole('button', { name: 'Restore', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();
+  check('J10 Drive: Gemini-app session restored', await page.getByText(/Gym session \(Gemini app\)/).first().isVisible());
+  check('J10 Drive: access revoked after download', (await page.evaluate(() => window.__revoked)) === 'tok');
+  const stored = await page.evaluate(() => localStorage.getItem('evidencefit_app_state_v1') || '');
+  check('J10 Drive: key inside the file not kept', !stored.includes('FILE-KEY'));
+
   // J8: layout fits phone width
   for (const tab of ['Today', 'Plan', 'Progress', 'Coach', 'Settings']) {
     await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: tab }).click();
