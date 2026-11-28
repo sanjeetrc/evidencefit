@@ -100,6 +100,12 @@ Owner reported no way to log an evening road walk at 4.8 km/h. Today now has a "
 - Backups saved by the earlier Gemini Canvas version (with `circuitLogs`) are converted on import: each set becomes a logged set, RPE = 10 minus RIR. Any API keys in the file are ignored.
 - Tests: AC-17 (Gemini file import), e2e J10 (Drive restore with Google mocked).
 
+## Release 1.6 (2026-11-28): features from the older Gemini-style app
+- Today starts with "Logging for": Today, Yesterday, 2 days ago, or any date in the last 60 days. Sessions, walks, circuits and protein go to that day; switching with unsaved sets asks first.
+- "Before you train" daily symptom check (the six red-flag symptoms). Any tick shows a "Do not exercise today" card with when to call 108/112. One check per day, kept for 90 days; Gemini-app `safetyChecks` import as is.
+- "Type or say the whole circuit": free text or the browser's speech service (en-IN), read on the device by `domain/circuitParser.ts` (number words, sets x reps / "by" / "into", kg/lb, minutes/seconds, km/h, incline, RIR or RPE, pain). Names snap to plan and past exercises. Preview before saving; pieces without reps or time are listed and not saved.
+- Tests: AC-18 (parser), AC-19 (safety checks), e2e J11-J13.
+
 ## Backup and restore (runbook)
 - Settings → *Download backup* (all people). The app nags after 14 days. Keep copies in Google Drive.
 - Restore: Settings → *Restore from backup* → confirm. Accepts prototype (v1) backups.

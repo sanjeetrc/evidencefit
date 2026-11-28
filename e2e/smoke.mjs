@@ -111,10 +111,47 @@ try {
   check('J9 walk shown in Progress', (await page.getByText(/Evening walk, road: 30 min · 2\.4 km · 4\.8 km\/h/).count()) > 0);
   check('J9 counts toward aerobic minutes', (await page.getByText(/^30 \/ 150\+$/).count()) > 0 || (await page.locator('text=/\b30 \/ 150\+/').count()) > 0);
 
+  // J11: "Before you train" symptom check
+  const nav = (n) => page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: n }).click();
+  await nav('Today');
+  check('J11 symptom check shown before training', await page.getByRole('heading', { name: 'Before you train' }).isVisible());
+  await page.getByLabel('Dizziness, light-headedness or fainting').check();
+  await page.getByRole('button', { name: 'Save: I have this' }).click();
+  check('J11 a warning sign means no exercise today', await page.getByRole('alert').getByText('Do not exercise today').isVisible());
+  await shot('08-symptom-stop');
+  await page.getByRole('alert').getByRole('button', { name: 'Change' }).click();
+  await page.getByLabel('Dizziness, light-headedness or fainting').uncheck();
+  await page.getByRole('button', { name: 'None of these: I feel fine' }).click();
+  check('J11 all clear is recorded', await page.getByText(/Before you train: checked.*no warning signs/).isVisible());
+
+  // J12: log for an earlier day
+  const yLabel = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(12); return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); });
+  await page.getByRole('group', { name: 'Logging for' }).getByRole('button', { name: 'Yesterday' }).click();
+  check('J12 earlier day is clearly marked', await page.getByText(new RegExp(`Logging for \\w+ ${yLabel}\\. Sessions, walks and protein`)).isVisible());
+  check('J12 protein card follows the chosen day', await page.getByRole('heading', { name: `Protein on ${yLabel}` }).isVisible());
+  check('J12 symptom check only for today', (await page.getByRole('heading', { name: 'Before you train' }).count()) === 0);
+
+  // J13: type the whole circuit, read offline, save to the chosen day
+  await page.getByText('Type or say the whole circuit').click();
+  await page.getByLabel('Circuit in your words').fill('leg press 40 kg 3 by 12 rir 2, plank 3 x 30 seconds, hip thrust');
+  await page.getByRole('button', { name: 'Read it' }).click();
+  check('J13 circuit read into exercises', await page.getByText('3 × 12 reps · 40 kg · RPE 8').isVisible() && await page.getByText('3 × 30 sec').isVisible());
+  check('J13 piece without reps is flagged, not saved', await page.getByText('No reps or time found for:').isVisible());
+  await shot('09-circuit');
+  await page.getByRole('button', { name: new RegExp(`Save circuit for ${yLabel} \\(2\\)`) }).click();
+  check('J13 circuit saved', await page.getByText(new RegExp(`Circuit saved for ${yLabel}: 2 exercise`)).isVisible());
+  const st = JSON.parse(await page.evaluate(() => localStorage.getItem('evidencefit_app_state_v1')));
+  const prof = st.profiles.find((x) => x.id === st.activeProfileId);
+  const circ = prof.workouts.find((w) => w.title === 'Circuit (typed or spoken)');
+  const yISO = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  check('J13 saved to yesterday with 3 leg press sets', !!circ && circ.date === yISO && circ.exercises[0].sets.length === 3 && circ.exercises[0].sets[0].rpe === 8, circ ? circ.date : 'missing');
+  await page.getByRole('group', { name: 'Logging for' }).getByRole('button', { name: 'Today' }).click();
+  check('J12 back to today', await page.getByRole('heading', { name: 'Protein today' }).isVisible());
+
   // J5: persistence across reload
   await page.reload();
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Progress' }).click();
-  check('J5 data survives reload', await page.getByText(/Leg press 3×/).isVisible());
+  check('J5 data survives reload', await page.getByText(/Leg press 3×/).first().isVisible());
 
   // J6: backup excludes API key; corrupt import is rejected without crashing
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Settings' }).click();

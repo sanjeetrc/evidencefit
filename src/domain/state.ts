@@ -3,7 +3,7 @@ import { daysAgoISO, formatDateISO, getDayKeyFromDate, isValidISODate } from './
 import { fromUnit } from './units';
 import {
   AppState, Benchmark, CARDIO_ACTIVITIES, CONDITION_KEYS, CardioActivity, CardioDetail, TIMES_OF_DAY, TimeOfDay, ChatMessage, DAYS_OF_WEEK, DayKey, DayPlan, LoadUnit, LoggedExercise, LoggedSet,
-  MEDICATION_KEYS, Profile, Program, ProgramExercise, ProteinItem, RED_FLAG_KEYS, Unit, Workout,
+  MEDICATION_KEYS, Profile, Program, RedFlagKey, SafetyCheck, ProgramExercise, ProteinItem, RED_FLAG_KEYS, Unit, Workout,
 } from './types';
 
 export const STORAGE_KEY = 'evidencefit_app_state_v1'; // unchanged so existing prototype data loads
@@ -282,7 +282,21 @@ export function parseProfile(v: unknown): Profile | null {
     proteinLogs: parseProteinLogs(v.proteinLogs),
     benchmarks: arr(v.benchmarks).map(parseBenchmark).filter((b): b is Benchmark => b !== null),
     chatHistory: parseChat(v.chatHistory),
+    safetyChecks: parseSafetyChecks(v.safetyChecks),
   };
+}
+
+/** Daily "Before you train" checks; keeps the latest 90 days. Same shape as the Gemini version stores. */
+function parseSafetyChecks(v: unknown): Record<string, SafetyCheck> {
+  if (!isObj(v)) return {};
+  const out: Record<string, SafetyCheck> = {};
+  for (const d of Object.keys(v).filter(isValidISODate).sort().slice(-90)) {
+    const c = v[d];
+    if (!isObj(c)) continue;
+    const flags = arr(c.flags).filter((f): f is RedFlagKey => (RED_FLAG_KEYS as readonly unknown[]).includes(f));
+    out[d] = { at: str(c.at, '', 40), flags: [...new Set(flags)] };
+  }
+  return out;
 }
 
 export type ParseResult = { ok: true; state: AppState; migratedFrom: number | null } | { ok: false; error: string };

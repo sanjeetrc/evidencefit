@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, Bot, CheckCircle2, CloudSun, Dumbbell, Flame, HeartPulse, HelpCircle, Info, Minus, Moon, Plus, Trash2, TrendingUp, Undo2, Utensils, X,
 } from 'lucide-react';
 import { Audit, exerciseWarnings, mealSlotsFor } from '../domain/engine';
-import { formatDateISO, getDayKeyFromDate, shortDateLabel } from '../domain/dates';
+import { daysAgoISO, formatDateISO, getDayKeyFromDate, isValidISODate, shortDateLabel } from '../domain/dates';
 import { PAIN_AREAS, PAIN_SCALE, PAIN_SIDES, PROTEIN_FOODS, countedName, portionTotal } from '../domain/reference';
 import { KG_PER_LB, displayLoad, fromUnit } from '../domain/units';
 import { inferRiskTags, isOneSided } from '../domain/program';
@@ -12,6 +12,8 @@ import { Climate, DAYS_OF_WEEK, DayKey, LoadUnit, Side, Location, LoggedExercise
 import { Card, CardHeader, NumInput } from './common';
 import { Timer } from './Timer';
 import { CardioCard } from './CardioCard';
+import { CircuitCard } from './CircuitCard';
+import { SafetyCheckCard } from './SafetyCheckCard';
 
 /** `load` is in the exercise's own unit (kg or lb), exactly as typed; converted to kg on save. */
 export interface DraftSet { load: number | null; reps: number | null; rpe: number | null; pain: number | null; side?: Side }
@@ -128,7 +130,11 @@ interface Props {
 }
 
 export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfile, onAskSwap, showToast, confirm, backupDue, goToSettings }: Props) {
-  const today = formatDateISO();
+  const realToday = formatDateISO();
+  // The day being logged: today, or an earlier day the user picked (never the future).
+  const [logDate, setLogDate] = useState(realToday);
+  const today = logDate > realToday ? realToday : logDate;
+  const isToday = today === realToday;
   const todayKey = getDayKeyFromDate(today);
   // A draft from an earlier day is stale: start a fresh one for today.
   const draft = useMemo(
@@ -270,8 +276,42 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
     showToast(`Session saved: ${exercises.length} exercise(s)${skipped ? `, ${skipped} left blank and skipped` : ''}.`);
   };
 
+  const draftTouched = draft.exercises.some((x) => x.sets.some((s) => s.reps !== null));
+  const pickDate = (d: string) => {
+    if (!isValidISODate(d) || d > realToday || d === today) return;
+    if (draftTouched) {
+      confirm({
+        title: 'Switch day?', confirmLabel: 'Switch day',
+        message: `The sets you've typed for ${shortDateLabel(today)} are not saved yet and will be cleared.`,
+        onConfirm: () => setLogDate(d),
+      });
+    } else setLogDate(d);
+  };
+  const quickDays = [{ label: 'Today', d: realToday }, { label: 'Yesterday', d: daysAgoISO(1) }, { label: '2 days ago', d: daysAgoISO(2) }];
+
   return (
     <div className="space-y-5">
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-slate-700">Logging for</span>
+          <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg" role="group" aria-label="Logging for">
+            {quickDays.map((q) => (
+              <button key={q.label} type="button" aria-pressed={today === q.d} onClick={() => pickDate(q.d)}
+                className={`px-3 min-h-[40px] rounded-md text-sm font-semibold ${today === q.d ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>{q.label}</button>
+            ))}
+          </div>
+          <input type="date" aria-label="Log for another date" value={today} max={realToday} min={daysAgoISO(60)}
+            onChange={(e) => pickDate(e.target.value)} className="min-h-[40px] px-2 rounded-lg border border-slate-300 text-sm" />
+        </div>
+        {!isToday && (
+          <p className="mt-2 text-sm font-semibold text-amber-900 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2">
+            Logging for {getDayKeyFromDate(today)} {shortDateLabel(today)}. Sessions, walks and protein you add now are saved to that day.
+          </p>
+        )}
+      </div>
+
+      {isToday && <SafetyCheckCard key={`${profile.id}-${realToday}`} profile={profile} today={realToday} updateProfile={updateProfile} />}
+
       {backupDue && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-sky-50 border border-sky-200 px-4 py-3 text-sm text-sky-950">
           <span>Your logs live only on this phone. Download a backup so a lost phone or cleared browser data cannot erase them.</span>
@@ -280,7 +320,7 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
       )}
 
       <Card>
-        <CardHeader icon={<Activity className="w-5 h-5" />} title="Today's readiness" subtitle={shortDateLabel(today)} />
+        <CardHeader icon={<Activity className="w-5 h-5" />} title={isToday ? "Today's readiness" : 'Readiness that day'} subtitle={shortDateLabel(today)} />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="flex items-center justify-between gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
             <span className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Moon className="w-4 h-4 text-indigo-600" aria-hidden /> Sleep last night (h)</span>
@@ -323,7 +363,7 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
       <Card>
         <CardHeader
           icon={<Utensils className="w-5 h-5" />}
-          title="Protein today"
+          title={isToday ? 'Protein today' : `Protein on ${shortDateLabel(today)}`}
           subtitle={renal ? 'Kidney disease: logging only. Follow the limit your doctor sets.' : `Target ${target} g/day; aim for at least ${perMeal} g at each meal`}
           right={<div className="text-right"><span className="text-2xl font-extrabold text-emerald-800 tabular-nums">{total} g</span>{!renal && <span className="text-sm font-semibold text-slate-600"> / {target} g</span>}</div>}
         />
@@ -435,6 +475,8 @@ export function TodayTab({ profile, audit, draft: draftIn, setDraft, updateProfi
       </Card>
 
       <CardioCard profile={profile} today={today} rpeCap={audit.screening.rpeCap} updateProfile={updateProfile} showToast={showToast} confirm={confirm} />
+
+      <CircuitCard profile={profile} date={today} defaultLocation={profile.program[todayKey].location} updateProfile={updateProfile} showToast={showToast} />
 
       <Timer />
 

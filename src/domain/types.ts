@@ -188,6 +188,13 @@ export interface Profile {
   proteinLogs: Record<string, ProteinItem[]>;
   benchmarks: Benchmark[];
   chatHistory: ChatMessage[];
+  /** "Before you train" symptom check, one per day (YYYY-MM-DD). */
+  safetyChecks?: Record<string, SafetyCheck>;
+}
+
+export interface SafetyCheck {
+  at: string;
+  flags: RedFlagKey[];
 }
 
 export interface AiCoachSettings {
